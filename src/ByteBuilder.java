@@ -1,4 +1,10 @@
+/*****************************************
 
+This class specifically is released into the 
+Public Domain by the creator, Tustin2121.
+Feel free to use it however you please.
+
+*****************************************/
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
