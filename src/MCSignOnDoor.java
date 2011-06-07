@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.3";
+	private static final String VERSION = "1.4";
 	
 	private static ServerSocket serve;
 	private static int port = 25565;
@@ -67,11 +67,18 @@ public class MCSignOnDoor {
 							"	-l --logfile	Supplies a log file to write to (default: does not use log file)\n" +
 							"	-s --silent		Does not print output to the screen" +
 							"\n" +
+							"Notes:\n" +
+							"Some command lines treat the bang (!) as a special command character.\n" +
+							"If you would like to use a bang in your server message, be sure to escape\n" +
+							"it with a backslash (\\).\n" +
+							"Messages can also contain color codes by using an ampersand (&) followed by\n" +
+							"a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page.\n" +
+							"\n" +
 							"Usage examples:\n" +
 							"java -jar MCSignOnDoor\n" +
 							"java -jar MCSignOnDoor -m \"The server is down for maintenance.\"\n" +
 							"java -jar MCSignOnDoor -ip 192.168.1.1 -m \"Still waiting for bukkit to upgrade...\"\n" +
-							"java -jar MCSignOnDoor -p 54321 --message \"The MinecraftWB server has\n" +
+							"java -jar MCSignOnDoor -p 54321 --message \"The &eMinecraftWB &fserver has\n" +
 							"moved to 192.168.1.1\\!\"\n" +
 							"java -jar MCSignOnDoor -l logfile.log -s -m \"Slim's server is currently\n" +
 							"being removed of excessive genitalia.\"\n"
@@ -87,10 +94,16 @@ public class MCSignOnDoor {
 							System.out.println("Message is too long. It cannot exceed 250 characters.");
 							System.exit(-1);
 						}
+						if (awayMessage.endsWith("&")){
+							System.out.println("Message ends with &, which is an incomplete color code and will crash the client.");
+							System.exit(-1);
+						}
 						{
 							Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
 							Matcher m = p.matcher(awayMessage);
-							awayMessage = m.replaceAll("!");
+							awayMessage = m
+								.replaceAll("!")
+								.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
 						}
 						awayMessage.getBytes("UTF8");
 					} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--logfile")){
