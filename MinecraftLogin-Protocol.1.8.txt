@@ -1,0 +1,25 @@
+? [00][msgLen][message] - send message to client/server (used for name in handshake)
+? [01] - ACK
+? [02] - (?) Login
+  [FE] - Info
+? [FF] - disconnect
+
+Ping:
+Client: [FE]
+Server: [FF:00:17:00]"A Minecraft Server"[A7]0[A7]20
+Server: [FF:00:11:00]"Hello World!"[A7:00:30:00:A7:00:32:00:30] 
+
+Login:
+<connect>
+Client: [02]
+Server: [02]
+Client: [00][nameLen][name]
+Server: [00][len][ServerID]
+Client: [02]
+Client: [00:00:00:09][00][len][name][00][08]Password[00:00:00:00:00:00:00:00:00]
+Server: [01] (ok to login)
+
+-or-
+Server: [FF] (disconnect)
+Server: [00][len][message] (reason for disconnect)
+<disconnect>

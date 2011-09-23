@@ -36,12 +36,16 @@ public class MCSignOnDoor {
 	private static int port = 25565;
 	private static InetAddress ip = null;
 	private static String awayMessage = "The server is not currently running.";
+	private static String motdMessage = "MCSignOnDoor: Server not Running.";
+	private static String numplayers = "0", maxplayers = "0";
+	private static boolean respondToPing = true, ratioSet = false;
 
 	public static void main(String[] args) {
 		{ //parse command line switches
 			LinkedList<String> argbuffer = new LinkedList<String>();
 			Collections.addAll(argbuffer, args);
 			try {
+				boolean custommotd = false;
 				while(!argbuffer.isEmpty()){
 					String arg = argbuffer.pop();
 					arg = arg.replace('/', '-');
@@ -64,6 +68,10 @@ public class MCSignOnDoor {
 							"	-i --address	Sets the ip address the messenger runs on (default: null)\n" +
 							"	-m --message	Sets the message to send to connecting players (250 char max)\n" +
 							"		(default: \""+awayMessage+"\")\n" +
+							"      --motd    Sets the server list message of the day. (Defaults to truncated\n" +
+							"        message setting)\n" +
+							"      --ignoreping   Sets McSod to ignore incoming pings. Server appears offline.\n" +
+							"      --players    Sets the player ratio given in pings. (in form \"1/10\")*\n" +
 							"	-l --logfile	Supplies a log file to write to (default: does not use log file)\n" +
 							"	-s --silent		Does not print output to the screen" +
 							"\n" +
@@ -73,21 +81,26 @@ public class MCSignOnDoor {
 							"it with a backslash (\\).\n" +
 							"Messages can also contain color codes by using an ampersand (&) followed by\n" +
 							"a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page.\n" +
+							"When setting the player ratio to show, non-numbers and a ratio with 0 max players\n" +
+							"will display as \"???\" on the client. Player ratio also cuts into the max length\n" +
+							"of the message of the day.\n" +
 							"\n" +
 							"Usage examples:\n" +
 							"java -jar MCSignOnDoor\n" +
 							"java -jar MCSignOnDoor -m \"The server is down for maintenance.\"\n" +
 							"java -jar MCSignOnDoor -ip 192.168.1.1 -m \"Still waiting for bukkit to upgrade...\"\n" +
 							"java -jar MCSignOnDoor -p 54321 --message \"The &eMinecraftWB &fserver has\n" +
-							"moved to 192.168.1.1\\!\"\n" +
+							"    moved to 192.168.1.1\\!\" --motd \"Moved to 192.168.1.1\"\n" +
 							"java -jar MCSignOnDoor -l logfile.log -s -m \"Slim's server is currently\n" +
-							"being removed of excessive genitalia.\"\n"
+							"    being removed of excessive genitalia.\" --motd \"Removing d*cks\" --players \"6/9\"\n"
 						);
 						System.exit(0);
 					} else if (arg.equalsIgnoreCase("-p") || arg.equalsIgnoreCase("--port")){
 						port = Integer.parseInt(argbuffer.pop());
 					} else if (arg.equalsIgnoreCase("-ip") ||arg.equalsIgnoreCase("-i") || arg.equalsIgnoreCase("--address")){
 						ip = InetAddress.getByName(argbuffer.pop());
+					} else if (arg.equalsIgnoreCase("--ignoreping")){
+						respondToPing = false;
 					} else if (arg.equalsIgnoreCase("-m") || arg.equalsIgnoreCase("--message")){
 						awayMessage = argbuffer.pop();
 						if (awayMessage.length() > 250){
@@ -105,7 +118,34 @@ public class MCSignOnDoor {
 								.replaceAll("!")
 								.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
 						}
-						awayMessage.getBytes("UTF8");
+						//awayMessage.getBytes("UTF8");
+					} else if (arg.equalsIgnoreCase("--motd")){
+						custommotd = true;
+						motdMessage = argbuffer.pop();
+						if (motdMessage.contains("&")){
+							System.out.println("Message of the Day cannot contain color symbols.");
+							System.exit(-1);
+						}
+						{
+							Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
+							Matcher m = p.matcher(motdMessage);
+							motdMessage = m
+								.replaceAll("!");
+						}
+						//awayMessage.getBytes("UTF8");
+					} else if (arg.equalsIgnoreCase("--players") || arg.equalsIgnoreCase("--ratio")){
+						ratioSet = true;
+						String ratio = argbuffer.pop();
+						Pattern p = Pattern.compile("^([^/]+)/(.+)$");
+						Matcher m = p.matcher(ratio);
+						if (m.find()){
+							numplayers = m.group(1);
+							maxplayers = m.group(2);
+						} else {
+							System.out.println("Invalid player ratio format. Please supply a string in the form \"X/Y\".");
+							System.exit(-1);
+						}
+						
 					} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--logfile")){
 						String logfilename = argbuffer.pop();
 						Logger rootlog = Logger.getLogger("");
@@ -118,6 +158,24 @@ public class MCSignOnDoor {
 						}
 					}
 				} //end while
+				
+				if (custommotd){
+					if (motdMessage.length()+numplayers.length()+maxplayers.length()+2 > 64){
+						System.out.println("MotD is too long. The player ratio and the MotD combined " +
+								"cannot exceed 64 characters. Note that the player ratio is sent as the top number and bottom " +
+								"number as strings, with two extra characters separating them, totalling at least 4 characters.");
+						System.exit(-1);
+					}
+				} else {
+					motdMessage = awayMessage.replaceAll("(\u00A7([a-f0-9]))", "");
+					int allowedlen = 64 - (2+numplayers.length()+maxplayers.length());
+					if (motdMessage.length() > allowedlen){
+						motdMessage = motdMessage.substring(0, 64-allowedlen);
+						if (motdMessage.length() + 4 > awayMessage.length()) {//if the message was truncated substantially, add ellipses
+							motdMessage = motdMessage.substring(0, motdMessage.length()-3).concat("...");
+						}
+					}
+				}
 			} catch (SecurityException e) {
 				e.printStackTrace();
 				System.out.println("You don't have proper permission to either open a file or access the network.");
@@ -152,15 +210,25 @@ public class MCSignOnDoor {
 		LOG.info("MCSignOnDoor Client Notifier v"+VERSION+" by Tustin2121");
 		if (ip != null)
 			LOG.info("Starting server on "+ip+":"+port+" with message \""+awayMessage+"\"");
-		else LOG.info("Starting server on port "+port+" with message \""+awayMessage+"\"");
+		else 
+			LOG.info("Starting server on port "+port+" with message \""+awayMessage+"\"");
+		if (respondToPing)
+			LOG.info("Server set to respond to pings with motd \""+motdMessage+"\" and player ratio "+numplayers+"/"+maxplayers);
+		else
+			LOG.info("Server set to ignore pings.");
 		
 		if (awayMessage.length() > 80){
 			LOG.warning("Message length exceeds 80 characters. Messages don't wrap on the client, even with newline characters, and may be cut off when shown.");
 		}
+		if (ratioSet){ //this is so we're not throwing this warning when the user doesn't explicitly set a ratio
+			if ((!numplayers.matches("[0-9]+") || !maxplayers.matches("[0-9]+") || maxplayers.equals("0"))){
+				LOG.warning("Player ratio may not be shown by client. Player ratio must be a valid, non-negative fraction to be displayed to the player.");
+			}
+		}
 		
 		try{
 			if (ip == null){
-			serve = new ServerSocket(port);
+				serve = new ServerSocket(port);
 			} else {
 				serve = new ServerSocket(port, 50, ip);
 			}
@@ -206,31 +274,33 @@ public class MCSignOnDoor {
 		@Override public void run() {
 			try {
 				byte[] inbyte = new byte[256];
-//				char[] inchars = new char[128];
-/*				
-				sendConnect();
-				sendMessage("123456789101112");
-	*/			
+
 				in.read(inbyte, 0, 1); //read connect byte
-				
-				in.read(inbyte, 1, 2); //read message length
-				int len = parseChar(inbyte, 1);
-				in.read(inbyte, 3, len*2); //read message
-				
-				{
-					ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
-					CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
-					CharBuffer cb = d.decode(bb);
-					LOG.info("Reported client name: "+ cb.toString());
+				if (inbyte[0] == (byte)0xFE) { //Minecraft 1.8 Server Ping
+					if (!respondToPing) {
+						LOG.info("Client pinging server. Ignoring.");
+						return;
+					}
+					LOG.info("Client pinging server. Responding.");
+					sendInfo(motdMessage, numplayers, maxplayers);
+				} else {
+					in.read(inbyte, 1, 2); //read message length
+					int len = parseChar(inbyte, 1);
+					in.read(inbyte, 3, len*2); //read message
+					
+					{
+						ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
+						CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
+						CharBuffer cb = d.decode(bb);
+						LOG.info("Reported client name: "+ cb.toString() +". Turning away.");
+					}
+					
+					sendDisconnect(awayMessage);
 				}
-				
-//				LOG.info("Reported client name: "+ new String(Arrays.copyOfRange(inbyte, 3, 2+len), Charset.forName("UTF-8")));
-				
-				sendDisconnect(awayMessage);
-//				sendMessage(awayMessage);
-				sock.close();
 			} catch (IOException e) {
 				LOG.log(Level.SEVERE, "IOException while processing client!", e);
+			} finally {
+				try {sock.close();} catch (IOException e){}
 			}
 		}
 		
@@ -255,6 +325,23 @@ public class MCSignOnDoor {
 			bb.appendSpecial(message.length(), 2, false);
 			bb.append(message);
 			
+//			System.out.println(bb.toString());
+			out.write(bb.toByteArray());
+			out.flush();
+		}
+		private void sendInfo(String message, String numPlayers, String maxPlayers) throws IOException {
+			ByteBuilder bb = new ByteBuilder();
+			bb.append((byte)0xFF);
+			bb.appendSpecial(message.length()+numPlayers.length()+maxPlayers.length()+2, 2, false);
+			bb.append(message);
+			
+			//if (sendPlayerRatio)
+			{
+				bb.append((byte)0).append((byte)0xA7);
+				bb.append(numPlayers);
+				bb.append((byte)0).append((byte)0xA7);
+				bb.append(maxPlayers);
+			}
 //			System.out.println(bb.toString());
 			out.write(bb.toByteArray());
 			out.flush();
