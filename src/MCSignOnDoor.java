@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
@@ -25,6 +26,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
@@ -303,6 +305,9 @@ public class MCSignOnDoor {
 						"    being removed of excessive genitalia.\" --motd \"Removing d*cks\" --players \"6/9\"\n"
 					);
 					System.exit(0);
+				} else if (arg.equalsIgnoreCase("-c") || arg.equalsIgnoreCase("--cfg") || arg.equalsIgnoreCase("--config")){
+					parseConfigFile(new File(argbuffer.pop()));
+					break; //parse only the config
 				} else if (arg.equalsIgnoreCase("-p") || arg.equalsIgnoreCase("--port")){
 					port = Integer.parseInt(argbuffer.pop());
 				} else if (arg.equalsIgnoreCase("-ip") ||arg.equalsIgnoreCase("-i") || arg.equalsIgnoreCase("--address")){
@@ -354,7 +359,55 @@ public class MCSignOnDoor {
 			System.out.println("IOException during log file setup: "+e.getMessage());
 		} finally {}
 	}
-
+	
+	protected static void parseConfigFile(File config) {
+		try {
+			Reader br = new InputStreamReader(new FileInputStream(config));
+			Properties p = new Properties();
+			p.load(br);
+			for (Object keyo : p.keySet()){
+				String key = (String)keyo;
+				if (key.equalsIgnoreCase("port")){
+					port = Integer.parseInt(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("ip")){
+					ip = InetAddress.getByName(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("ignoreping")){
+					respondToPing = Boolean.parseBoolean(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("message")){
+					if (!setAwayMessage(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("motd")){
+					if (!setMotdMessage(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("playerratio")){
+					if (!setPlayerRatio(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("whitelistmessage")){
+					if (!setWhiteMessage(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("blacklistmessage") || key.equalsIgnoreCase("bannedlistmessage")){
+					if (!setBannedMessage(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("whitelistfile")){
+					loadWhiteList(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("blacklistfile") || key.equalsIgnoreCase("bannedlistfile")){
+					loadBlackList(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("basepath")){
+					basepath = new File(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("logfile")){
+					String logfilename = p.getProperty(key);
+					Logger rootlog = Logger.getLogger("");
+					rootlog.addHandler(new FileHandler(logfilename, true));
+				} else if (key.equalsIgnoreCase("silent")){
+					if (Boolean.parseBoolean(p.getProperty(key))) {
+						Logger rootlog = Logger.getLogger("");
+						Handler hs[] = rootlog.getHandlers();
+						for (Handler h : hs){
+							if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
+						}
+					}
+				}
+			}
+		} catch (IOException e){
+			System.out.println("IOException while attempting to load config file: "+e.getMessage());
+		}
+	}
+	
 	protected static void determineDefaults(){
 		if (motdMessage != null){
 			if (motdMessage.length()+numplayers.length()+maxplayers.length()+2 > 64){
