@@ -1,6 +1,11 @@
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
@@ -13,10 +18,13 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.security.InvalidParameterException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
@@ -30,165 +38,33 @@ import java.util.regex.Pattern;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.4";
+	private static final String VERSION = "1.6";
+	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
+	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
+	private static final String WHITELIST_NAME_FILE = "white-list.txt";
+	private static final String DEFAULT_LOGFILE = "mcsod.log";
 	
 	private static ServerSocket serve;
 	private static int port = 25565;
 	private static InetAddress ip = null;
+	
 	private static String awayMessage = "The server is not currently running.";
-	private static String motdMessage = "MCSignOnDoor: Server not Running.";
+	
+	private static String motdMessage = null; //"MCSignOnDoor: Server not Running.";
 	private static String numplayers = "0", maxplayers = "0";
 	private static boolean respondToPing = true, ratioSet = false;
+	
+	private static File basepath = new File(".");
+	
+	private static HashSet<String> bannedUsers = null;
+	private static String bannedMessage = null;
+	
+	private static HashSet<String> whiteUsers = null;
+	private static String whitelistMessage = null;
 
 	public static void main(String[] args) {
-		{ //parse command line switches
-			LinkedList<String> argbuffer = new LinkedList<String>();
-			Collections.addAll(argbuffer, args);
-			try {
-				boolean custommotd = false;
-				while(!argbuffer.isEmpty()){
-					String arg = argbuffer.pop();
-					arg = arg.replace('/', '-');
-					if (arg.equalsIgnoreCase("--help") || arg.equalsIgnoreCase("-?") || arg.equalsIgnoreCase("--version")){
-						System.out.println(
-							"MINECRAFT Sign On Door\n" +
-							"Version "+VERSION+"\n" +
-							"by Tustin2121\n" +
-							"----------------------\n" +
-							"This program tells players attempting to connect to a minecraft server\n" +
-							"on this machine a message (defaulting to a 'server is off' message).\n" +
-							"This program cannot and is not meant to run while the minecraft server\n" +
-							"itself is running; it is meant to give a message to players as to why\n" +
-							"the server is not running.\n" +
-							"\n" +
-							"Usage: java -jar MCSignOnDoor.jar [switches]\n" +
-							"Command line switches:\n" +
-							"	-? --help	Displays this message and quits\n" +
-							"	-p --port	Sets the port the messenger runs on (default: "+port+")\n" +
-							"	-i --address	Sets the ip address the messenger runs on (default: null)\n" +
-							"	-m --message	Sets the message to send to connecting players (250 char max)\n" +
-							"		(default: \""+awayMessage+"\")\n" +
-							"      --motd    Sets the server list message of the day. (Defaults to truncated\n" +
-							"        message setting)\n" +
-							"      --ignoreping   Sets McSod to ignore incoming pings. Server appears offline.\n" +
-							"      --players    Sets the player ratio given in pings. (in form \"1/10\")*\n" +
-							"	-l --logfile	Supplies a log file to write to (default: does not use log file)\n" +
-							"	-s --silent		Does not print output to the screen" +
-							"\n" +
-							"Notes:\n" +
-							"Some command lines treat the bang (!) as a special command character.\n" +
-							"If you would like to use a bang in your server message, be sure to escape\n" +
-							"it with a backslash (\\).\n" +
-							"Messages can also contain color codes by using an ampersand (&) followed by\n" +
-							"a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page.\n" +
-							"When setting the player ratio to show, non-numbers and a ratio with 0 max players\n" +
-							"will display as \"???\" on the client. Player ratio also cuts into the max length\n" +
-							"of the message of the day.\n" +
-							"\n" +
-							"Usage examples:\n" +
-							"java -jar MCSignOnDoor\n" +
-							"java -jar MCSignOnDoor -m \"The server is down for maintenance.\"\n" +
-							"java -jar MCSignOnDoor -ip 192.168.1.1 -m \"Still waiting for bukkit to upgrade...\"\n" +
-							"java -jar MCSignOnDoor -p 54321 --message \"The &eMinecraftWB &fserver has\n" +
-							"    moved to 192.168.1.1\\!\" --motd \"Moved to 192.168.1.1\"\n" +
-							"java -jar MCSignOnDoor -l logfile.log -s -m \"Slim's server is currently\n" +
-							"    being removed of excessive genitalia.\" --motd \"Removing d*cks\" --players \"6/9\"\n"
-						);
-						System.exit(0);
-					} else if (arg.equalsIgnoreCase("-p") || arg.equalsIgnoreCase("--port")){
-						port = Integer.parseInt(argbuffer.pop());
-					} else if (arg.equalsIgnoreCase("-ip") ||arg.equalsIgnoreCase("-i") || arg.equalsIgnoreCase("--address")){
-						ip = InetAddress.getByName(argbuffer.pop());
-					} else if (arg.equalsIgnoreCase("--ignoreping")){
-						respondToPing = false;
-					} else if (arg.equalsIgnoreCase("-m") || arg.equalsIgnoreCase("--message")){
-						awayMessage = argbuffer.pop();
-						if (awayMessage.length() > 250){
-							System.out.println("Message is too long. It cannot exceed 250 characters.");
-							System.exit(-1);
-						}
-						if (awayMessage.endsWith("&")){
-							System.out.println("Message ends with &, which is an incomplete color code and will crash the client.");
-							System.exit(-1);
-						}
-						{
-							Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
-							Matcher m = p.matcher(awayMessage);
-							awayMessage = m
-								.replaceAll("!")
-								.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
-						}
-						//awayMessage.getBytes("UTF8");
-					} else if (arg.equalsIgnoreCase("--motd")){
-						custommotd = true;
-						motdMessage = argbuffer.pop();
-						if (motdMessage.contains("&")){
-							System.out.println("Message of the Day cannot contain color symbols.");
-							System.exit(-1);
-						}
-						{
-							Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
-							Matcher m = p.matcher(motdMessage);
-							motdMessage = m
-								.replaceAll("!");
-						}
-						//awayMessage.getBytes("UTF8");
-					} else if (arg.equalsIgnoreCase("--players") || arg.equalsIgnoreCase("--ratio")){
-						ratioSet = true;
-						String ratio = argbuffer.pop();
-						Pattern p = Pattern.compile("^([^/]+)/(.+)$");
-						Matcher m = p.matcher(ratio);
-						if (m.find()){
-							numplayers = m.group(1);
-							maxplayers = m.group(2);
-						} else {
-							System.out.println("Invalid player ratio format. Please supply a string in the form \"X/Y\".");
-							System.exit(-1);
-						}
-						
-					} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--logfile")){
-						String logfilename = argbuffer.pop();
-						Logger rootlog = Logger.getLogger("");
-						rootlog.addHandler(new FileHandler(logfilename, true));
-					} else if (arg.equalsIgnoreCase("-s") || arg.equalsIgnoreCase("--silent")){
-						Logger rootlog = Logger.getLogger("");
-						Handler hs[] = rootlog.getHandlers();
-						for (Handler h : hs){
-							if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
-						}
-					}
-				} //end while
-				
-				if (custommotd){
-					if (motdMessage.length()+numplayers.length()+maxplayers.length()+2 > 64){
-						System.out.println("MotD is too long. The player ratio and the MotD combined " +
-								"cannot exceed 64 characters. Note that the player ratio is sent as the top number and bottom " +
-								"number as strings, with two extra characters separating them, totalling at least 4 characters.");
-						System.exit(-1);
-					}
-				} else {
-					motdMessage = awayMessage.replaceAll("(\u00A7([a-f0-9]))", "");
-					int allowedlen = 64 - (2+numplayers.length()+maxplayers.length());
-					if (motdMessage.length() > allowedlen){
-						motdMessage = motdMessage.substring(0, 64-allowedlen);
-						if (motdMessage.length() + 4 > awayMessage.length()) {//if the message was truncated substantially, add ellipses
-							motdMessage = motdMessage.substring(0, motdMessage.length()-3).concat("...");
-						}
-					}
-				}
-			} catch (SecurityException e) {
-				e.printStackTrace();
-				System.out.println("You don't have proper permission to either open a file or access the network.");
-			} catch (UnsupportedEncodingException e){
-				e.printStackTrace();
-				System.out.println("Encoding not supported.");
-			} catch (UnknownHostException e){
-				e.printStackTrace();
-				System.out.println("Unknown host: the argument entered for ip address is not valid or could not be resolved to an ip address.");
-			} catch (IOException e) {
-				System.out.println("IOException during log file setup: "+e.getMessage());
-			} finally {}
-		}
+		parseCommandLine(args);
+		determineDefaults();
 		
 		{//fix formatting on logger
 			Logger rootlog = Logger.getLogger("");
@@ -256,6 +132,260 @@ public class MCSignOnDoor {
 		}
 	}
 	
+	///////////////////////////////////////////////////////////////////////////////////
+	private static boolean checkMessageForSignOnDoor(String msg){
+		if (msg.length() > 250){
+			System.out.println("Message is too long. It cannot exceed 250 characters.");
+			return false;
+		}
+		if (msg.endsWith("&")){
+			System.out.println("Message ends with &, which is an incomplete color code and will crash the client.");
+			return false;
+		}
+		return true;
+	}
+	
+	public static boolean setAwayMessage(String away){
+		if (!checkMessageForSignOnDoor(away)) return false;
+		{
+			Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
+			Matcher m = p.matcher(away);
+			away = m
+				.replaceAll("!")
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+		}
+		awayMessage = away;
+		return true;
+	}
+	public static boolean setBannedMessage(String away){
+		if (!checkMessageForSignOnDoor(away)) return false;
+		{
+			Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
+			Matcher m = p.matcher(away);
+			away = m
+				.replaceAll("!")
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+		}
+		bannedMessage = away;
+		return true;
+	}
+	public static boolean setWhiteMessage(String away){
+		if (!checkMessageForSignOnDoor(away)) return false;
+		{
+			Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
+			Matcher m = p.matcher(away);
+			away = m
+				.replaceAll("!")
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+		}
+		whitelistMessage = away;
+		return true;
+	}
+	public static boolean setMotdMessage(String motd){
+		if (motd.contains("&")){
+			System.out.println("Message of the Day cannot contain color symbols.");
+			return false;
+		}
+		{
+			Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
+			Matcher m = p.matcher(motd);
+			motd = m
+				.replaceAll("!");
+		}
+		motdMessage = motd;
+		return true;
+	}
+	public static boolean setPlayerRatio(String ratio){
+		ratioSet = true;
+		Pattern p = Pattern.compile("^([^/]+)/(.+)$");
+		Matcher m = p.matcher(ratio);
+		if (m.find()){
+			numplayers = m.group(1);
+			maxplayers = m.group(2);
+		} else {
+			System.out.println("Invalid player ratio format. Please supply a string in the form \"X/Y\".");
+			return false;
+		}
+		return true;
+	}
+	
+	public static List<String> loadListing(String filename) throws FileNotFoundException, IOException{
+		File f = new File(filename);
+		if (f.exists()) throw new FileNotFoundException();
+		BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f)));
+		ArrayList<String> listing = new ArrayList<String>();
+		String line;
+		while((line = br.readLine()) != null){
+			listing.add(line);
+		}
+		br.close();
+		return listing;
+	}
+	public static boolean loadBlackList(String filename){
+		if (bannedUsers != null){
+			bannedUsers = new HashSet<String>();
+		}
+		try {
+			bannedUsers.addAll(loadListing(basepath.getPath() + File.pathSeparator + filename));
+		} catch (FileNotFoundException ex){
+			System.out.println("Could not find file: "+basepath.getPath() + File.pathSeparator + filename);
+		} catch (IOException ex){
+			System.out.println("Fatal error while reading blacklist file: ");
+			ex.printStackTrace();
+		}
+		return true;
+	}
+	public static boolean loadWhiteList(String filename){
+		if (whiteUsers != null){
+			whiteUsers = new HashSet<String>();
+		}
+		try {
+			whiteUsers.addAll(loadListing(basepath.getPath() + File.pathSeparator + filename));
+		} catch (FileNotFoundException ex){
+			System.out.println("Could not find file: "+basepath.getPath() + File.pathSeparator + filename);
+		} catch (IOException ex){
+			System.out.println("Fatal error while reading blacklist file: ");
+			ex.printStackTrace();
+		}
+		return true;
+	}
+	
+	protected static void parseCommandLine(String[] args){
+		LinkedList<String> argbuffer = new LinkedList<String>();
+		Collections.addAll(argbuffer, args);
+		try {
+			while(!argbuffer.isEmpty()){
+				String arg = argbuffer.pop();
+				arg = arg.replace('/', '-');
+				if (arg.equalsIgnoreCase("--help") || arg.equalsIgnoreCase("-?") || arg.equalsIgnoreCase("--version")){
+					System.out.println(
+						"MINECRAFT Sign On Door\n" +
+						"Version "+VERSION+"\n" +
+						"by Tustin2121\n" +
+						"----------------------\n" +
+						"This program tells players attempting to connect to a minecraft server\n" +
+						"on this machine a message (defaulting to a 'server is off' message).\n" +
+						"This program cannot and is not meant to run while the minecraft server\n" +
+						"itself is running; it is meant to give a message to players as to why\n" +
+						"the server is not running.\n" +
+						"\n" +
+						"Usage: java -jar MCSignOnDoor.jar [switches]\n" +
+						"Command line switches:\n" +
+						"	-? --help	Displays this message and quits\n" +
+						"	-p --port	Sets the port the messenger runs on (default: "+port+")\n" +
+						"	-i --address	Sets the ip address the messenger runs on (default: null)\n" +
+						"	-m --message	Sets the message to send to connecting players (250 char max)\n" +
+						"		(default: \""+awayMessage+"\")\n" +
+						"      --motd    Sets the server list message of the day. (Defaults to truncated\n" +
+						"        message setting)\n" +
+						"      --ignoreping   Sets McSod to ignore incoming pings. Server appears offline.\n" +
+						"      --players    Sets the player ratio given in pings. (in form \"1/10\")*\n" +
+						"	-l --log		Supplies a log file to write to (default: does not use log file)\n" +
+						"	-s --silent		Does not print output to the screen" +
+						"\n" +
+						"Notes:\n" +
+						"Some command lines treat the bang (!) as a special command character.\n" +
+						"If you would like to use a bang in your server message, be sure to escape\n" +
+						"it with a backslash (\\).\n" +
+						"Messages can also contain color codes by using an ampersand (&) followed by\n" +
+						"a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page.\n" +
+						"When setting the player ratio to show, non-numbers and a ratio with 0 max players\n" +
+						"will display as \"???\" on the client. Player ratio also cuts into the max length\n" +
+						"of the message of the day.\n" +
+						"\n" +
+						"Usage examples:\n" +
+						"java -jar MCSignOnDoor\n" +
+						"java -jar MCSignOnDoor -m \"The server is down for maintenance.\"\n" +
+						"java -jar MCSignOnDoor -ip 192.168.1.1 -m \"Still waiting for bukkit to upgrade...\"\n" +
+						"java -jar MCSignOnDoor -p 54321 --message \"The &eMinecraftWB &fserver has\n" +
+						"    moved to 192.168.1.1\\!\" --motd \"Moved to 192.168.1.1\"\n" +
+						"java -jar MCSignOnDoor -l logfile.log -s -m \"Slim's server is currently\n" +
+						"    being removed of excessive genitalia.\" --motd \"Removing d*cks\" --players \"6/9\"\n"
+					);
+					System.exit(0);
+				} else if (arg.equalsIgnoreCase("-p") || arg.equalsIgnoreCase("--port")){
+					port = Integer.parseInt(argbuffer.pop());
+				} else if (arg.equalsIgnoreCase("-ip") ||arg.equalsIgnoreCase("-i") || arg.equalsIgnoreCase("--address")){
+					ip = InetAddress.getByName(argbuffer.pop());
+				} else if (arg.equalsIgnoreCase("--ignoreping")){
+					respondToPing = false;
+				} else if (arg.equalsIgnoreCase("-m") || arg.equalsIgnoreCase("--message")){
+					if (!setAwayMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("--motd")){
+					if (!setMotdMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("--players") || arg.equalsIgnoreCase("--ratio")){
+					if (!setPlayerRatio(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("-w") || arg.equalsIgnoreCase("--whitemessage") || arg.equalsIgnoreCase("--whitelist-message")){
+					if (!setWhiteMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("-b") || arg.equalsIgnoreCase("--blackmessage") || arg.equalsIgnoreCase("--blacklist-message")
+						|| arg.equalsIgnoreCase("--bannedmessage") || arg.equalsIgnoreCase("--banned-message")){
+					if (!setBannedMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("--basepath")){
+					basepath = new File(argbuffer.pop());
+				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
+					String logfilename;
+					if (!argbuffer.peek().replace('/', '-').startsWith("-")){
+						logfilename = argbuffer.pop();
+					} else {
+						logfilename = DEFAULT_LOGFILE;
+					}
+					Logger rootlog = Logger.getLogger("");
+					rootlog.addHandler(new FileHandler(logfilename, true));
+				} else if (arg.equalsIgnoreCase("-s") || arg.equalsIgnoreCase("--silent")){
+					Logger rootlog = Logger.getLogger("");
+					Handler hs[] = rootlog.getHandlers();
+					for (Handler h : hs){
+						if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
+					}
+				} else {
+					System.out.println("Unknown command line switch \""+arg+"\". Continuing...");
+				}
+			} //end while
+		} catch (SecurityException e) {
+			e.printStackTrace();
+			System.out.println("You don't have proper permission to either open a file or access the network.");
+		} catch (UnsupportedEncodingException e){
+			e.printStackTrace();
+			System.out.println("Encoding not supported.");
+		} catch (UnknownHostException e){
+			e.printStackTrace();
+			System.out.println("Unknown host: the argument entered for ip address is not valid or could not be resolved to an ip address.");
+		} catch (IOException e) {
+			System.out.println("IOException during log file setup: "+e.getMessage());
+		} finally {}
+	}
+
+	protected static void determineDefaults(){
+		if (motdMessage != null){
+			if (motdMessage.length()+numplayers.length()+maxplayers.length()+2 > 64){
+				System.out.println("MotD is too long. The player ratio and the MotD combined " +
+						"cannot exceed 64 characters. Note that the player ratio is sent as the top number and bottom " +
+						"number as strings, with two extra characters separating them, totalling at least 4 characters.");
+				System.exit(-1);
+			}
+		} else {
+			motdMessage = awayMessage.replaceAll("(\u00A7([a-f0-9]))", "");
+			int allowedlen = 64 - (2+numplayers.length()+maxplayers.length());
+			if (motdMessage.length() > allowedlen){
+				motdMessage = motdMessage.substring(0, 64-allowedlen);
+				if (motdMessage.length() + 4 > awayMessage.length()) {//if the message was truncated substantially, add ellipses
+					motdMessage = motdMessage.substring(0, motdMessage.length()-3).concat("...");
+				}
+			}
+		}
+		
+		if (bannedMessage != null && bannedUsers == null){ //if a message was set but a file was not specified
+			loadBlackList(BLACKLIST_NAME_FILE);
+			loadBlackList(BLACKLIST_IP_FILE);
+		}
+		
+		if (whitelistMessage != null && whiteUsers == null){ //if a message was set but a file was not specified 
+			loadWhiteList(WHITELIST_NAME_FILE);
+		}
+	}
+	
+	///////////////////////////////////////////////////////////////////////////////////
+	
 	private static class ResponderThread extends Thread {
 		private Socket sock;
 		private BufferedInputStream in;
@@ -288,11 +418,25 @@ public class MCSignOnDoor {
 					int len = parseChar(inbyte, 1);
 					in.read(inbyte, 3, len*2); //read message
 					
+					String reportedName;
 					{
 						ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
 						CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
 						CharBuffer cb = d.decode(bb);
-						LOG.info("Reported client name: "+ cb.toString() +". Turning away.");
+						reportedName = cb.toString();
+						LOG.info("Reported client name: "+ reportedName +". Turning away.");
+					}
+					if (bannedMessage != null){// bannedUsers != null){
+						if (bannedUsers.contains(reportedName)) {
+							sendDisconnect(bannedMessage);
+							return;
+						}
+					}
+					if (whitelistMessage != null){// whiteUsers != null){
+						if (whiteUsers.contains(reportedName)) {
+							sendDisconnect(whitelistMessage);
+							return;
+						}
 					}
 					
 					sendDisconnect(awayMessage);
