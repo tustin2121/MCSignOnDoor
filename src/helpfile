@@ -1,0 +1,44 @@
+MINECRAFT Sign On Door
+Version %VERSION%
+by Tustin2121
+----------------------
+This program tells players attempting to connect to a minecraft server on this 
+machine a message (defaulting to a 'server is off' message). This program 
+cannot and is not meant to run while the minecraft server itself is running; 
+it is meant to give a message to players as to why the server is not running.
+
+Usage: java -jar MCSignOnDoor.jar [switches]
+Command line switches:
+	-? --help		Displays this message and quits
+	-p --port		Sets the port the messenger runs on (default: %PORT%)
+	-i --address	Sets the ip address the messenger runs on (default: null)
+	-m --message	Sets the message to send to connecting players 
+					(250 char max) (default: %AWAYMSG%)
+	   --motd    	Sets the server list message of the day (Defaults to 
+					truncated message setting)
+	   --ignoreping	Sets McSod to ignore incoming pings; Server appears offline
+	   --players	Sets the player ratio given in pings (in form "1/10")*
+	-l --log		Supplies a log file to write to 
+					(default: does not use log file)
+	-s --silent		Does not print output to the screen
+
+Notes:
+* Some command lines treat the bang (!) as a special command character.
+  If you would like to use a bang in your server message, be sure to escape
+  it with a backslash (\).
+* Messages can also contain color codes by using an ampersand (&) followed by
+  a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page
+* When setting the player ratio to show, non-numbers and a ratio with 0 max 
+  players will display as "???" on the client. Player ratio also cuts into the 
+  max length of the message of the day.
+
+Usage examples:
+java -jar MCSignOnDoor
+java -jar MCSignOnDoor -m "The server is down for maintenance."
+java -jar MCSignOnDoor -ip 192.168.1.1 -m "Still waiting for bukkit to 
+	upgrade..."
+java -jar MCSignOnDoor -p 54321 --message "The &eMinecraftWB &fserver has
+	moved to 192.168.1.1\!" --motd "Moved to 192.168.1.1"
+java -jar MCSignOnDoor -l logfile.log -s -m "Slim's server is currently
+	being removed of excessive genitalia." --motd "Removing d*cks" 
+	--players "6/9"

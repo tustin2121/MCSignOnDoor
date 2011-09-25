@@ -56,7 +56,10 @@ public class MCSignOnDoor {
 	private static String numplayers = "0", maxplayers = "0";
 	private static boolean respondToPing = true, ratioSet = false;
 	
-	private static File basepath = new File(".");
+	private static String basepath = "";//new File("").getPath()+File.separator;
+	
+	private static HashSet<String> blockedIps = null;
+	private static String blockedMessage = null;
 	
 	private static HashSet<String> bannedUsers = null;
 	private static String bannedMessage = null;
@@ -213,7 +216,7 @@ public class MCSignOnDoor {
 	
 	public static List<String> loadListing(String filename) throws FileNotFoundException, IOException{
 		File f = new File(filename);
-		if (f.exists()) throw new FileNotFoundException();
+		if (!f.exists()) throw new FileNotFoundException(f.getAbsolutePath());
 		BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f)));
 		ArrayList<String> listing = new ArrayList<String>();
 		String line;
@@ -223,14 +226,28 @@ public class MCSignOnDoor {
 		br.close();
 		return listing;
 	}
+	public static boolean loadIpList(String filename){
+		if (blockedIps == null){
+			blockedIps = new HashSet<String>();
+		}
+		try {
+			blockedIps.addAll(loadListing(basepath + filename));
+		} catch (FileNotFoundException ex){
+			System.out.println("Could not find file: "+ex.getMessage());
+		} catch (IOException ex){
+			System.out.println("Fatal error while reading blacklist file: ");
+			ex.printStackTrace();
+		}
+		return true;
+	}
 	public static boolean loadBlackList(String filename){
-		if (bannedUsers != null){
+		if (bannedUsers == null){
 			bannedUsers = new HashSet<String>();
 		}
 		try {
-			bannedUsers.addAll(loadListing(basepath.getPath() + File.pathSeparator + filename));
+			bannedUsers.addAll(loadListing(basepath + filename));
 		} catch (FileNotFoundException ex){
-			System.out.println("Could not find file: "+basepath.getPath() + File.pathSeparator + filename);
+			System.out.println("Could not find file: "+ex.getMessage());
 		} catch (IOException ex){
 			System.out.println("Fatal error while reading blacklist file: ");
 			ex.printStackTrace();
@@ -238,13 +255,13 @@ public class MCSignOnDoor {
 		return true;
 	}
 	public static boolean loadWhiteList(String filename){
-		if (whiteUsers != null){
+		if (whiteUsers == null){
 			whiteUsers = new HashSet<String>();
 		}
 		try {
-			whiteUsers.addAll(loadListing(basepath.getPath() + File.pathSeparator + filename));
+			whiteUsers.addAll(loadListing(basepath + filename));
 		} catch (FileNotFoundException ex){
-			System.out.println("Could not find file: "+basepath.getPath() + File.pathSeparator + filename);
+			System.out.println("Could not find file: "+ex.getMessage());
 		} catch (IOException ex){
 			System.out.println("Fatal error while reading blacklist file: ");
 			ex.printStackTrace();
@@ -260,50 +277,11 @@ public class MCSignOnDoor {
 				String arg = argbuffer.pop();
 				arg = arg.replace('/', '-');
 				if (arg.equalsIgnoreCase("--help") || arg.equalsIgnoreCase("-?") || arg.equalsIgnoreCase("--version")){
-					System.out.println(
-						"MINECRAFT Sign On Door\n" +
-						"Version "+VERSION+"\n" +
-						"by Tustin2121\n" +
-						"----------------------\n" +
-						"This program tells players attempting to connect to a minecraft server\n" +
-						"on this machine a message (defaulting to a 'server is off' message).\n" +
-						"This program cannot and is not meant to run while the minecraft server\n" +
-						"itself is running; it is meant to give a message to players as to why\n" +
-						"the server is not running.\n" +
-						"\n" +
-						"Usage: java -jar MCSignOnDoor.jar [switches]\n" +
-						"Command line switches:\n" +
-						"	-? --help	Displays this message and quits\n" +
-						"	-p --port	Sets the port the messenger runs on (default: "+port+")\n" +
-						"	-i --address	Sets the ip address the messenger runs on (default: null)\n" +
-						"	-m --message	Sets the message to send to connecting players (250 char max)\n" +
-						"		(default: \""+awayMessage+"\")\n" +
-						"      --motd    Sets the server list message of the day. (Defaults to truncated\n" +
-						"        message setting)\n" +
-						"      --ignoreping   Sets McSod to ignore incoming pings. Server appears offline.\n" +
-						"      --players    Sets the player ratio given in pings. (in form \"1/10\")*\n" +
-						"	-l --log		Supplies a log file to write to (default: does not use log file)\n" +
-						"	-s --silent		Does not print output to the screen" +
-						"\n" +
-						"Notes:\n" +
-						"Some command lines treat the bang (!) as a special command character.\n" +
-						"If you would like to use a bang in your server message, be sure to escape\n" +
-						"it with a backslash (\\).\n" +
-						"Messages can also contain color codes by using an ampersand (&) followed by\n" +
-						"a hexadecimal value (0-9 a-f). See the MC wiki's Classic Server Protocol page.\n" +
-						"When setting the player ratio to show, non-numbers and a ratio with 0 max players\n" +
-						"will display as \"???\" on the client. Player ratio also cuts into the max length\n" +
-						"of the message of the day.\n" +
-						"\n" +
-						"Usage examples:\n" +
-						"java -jar MCSignOnDoor\n" +
-						"java -jar MCSignOnDoor -m \"The server is down for maintenance.\"\n" +
-						"java -jar MCSignOnDoor -ip 192.168.1.1 -m \"Still waiting for bukkit to upgrade...\"\n" +
-						"java -jar MCSignOnDoor -p 54321 --message \"The &eMinecraftWB &fserver has\n" +
-						"    moved to 192.168.1.1\\!\" --motd \"Moved to 192.168.1.1\"\n" +
-						"java -jar MCSignOnDoor -l logfile.log -s -m \"Slim's server is currently\n" +
-						"    being removed of excessive genitalia.\" --motd \"Removing d*cks\" --players \"6/9\"\n"
-					);
+					TemplateFormatter tf = new TemplateFormatter(MCSignOnDoor.class.getResource("helpfile"));
+					tf.defineVariable("VERSION", VERSION);
+					tf.defineVariable("PORT", Integer.toString(port));
+					tf.defineVariable("AWAYMSG", awayMessage);
+					System.out.println(tf.execute());
 					System.exit(0);
 				} else if (arg.equalsIgnoreCase("-c") || arg.equalsIgnoreCase("--cfg") || arg.equalsIgnoreCase("--config")){
 					parseConfigFile(new File(argbuffer.pop()));
@@ -326,7 +304,7 @@ public class MCSignOnDoor {
 						|| arg.equalsIgnoreCase("--bannedmessage") || arg.equalsIgnoreCase("--banned-message")){
 					if (!setBannedMessage(argbuffer.pop())) { System.exit(-1); }
 				} else if (arg.equalsIgnoreCase("--basepath")){
-					basepath = new File(argbuffer.pop());
+					basepath = new File(argbuffer.pop()).getPath()+File.separator;
 				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
 					String logfilename;
 					if (!argbuffer.peek().replace('/', '-').startsWith("-")){
@@ -388,7 +366,7 @@ public class MCSignOnDoor {
 				} else if (key.equalsIgnoreCase("blacklistfile") || key.equalsIgnoreCase("bannedlistfile")){
 					loadBlackList(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("basepath")){
-					basepath = new File(p.getProperty(key));
+					basepath = new File(p.getProperty(key)).getPath()+File.separator;
 				} else if (key.equalsIgnoreCase("logfile")){
 					String logfilename = p.getProperty(key);
 					Logger rootlog = Logger.getLogger("");
@@ -429,7 +407,12 @@ public class MCSignOnDoor {
 		
 		if (bannedMessage != null && bannedUsers == null){ //if a message was set but a file was not specified
 			loadBlackList(BLACKLIST_NAME_FILE);
-			loadBlackList(BLACKLIST_IP_FILE);
+			if (blockedMessage == null){
+				blockedMessage = bannedMessage; 
+			}
+			if (blockedIps == null) {
+				loadIpList(BLACKLIST_IP_FILE);
+			}
 		}
 		
 		if (whitelistMessage != null && whiteUsers == null){ //if a message was set but a file was not specified 
@@ -479,14 +462,24 @@ public class MCSignOnDoor {
 						reportedName = cb.toString();
 						LOG.info("Reported client name: "+ reportedName +". Turning away.");
 					}
+					if (blockedMessage != null){
+						if (!blockedIps.isEmpty() &&
+								blockedIps.contains(sock.getInetAddress().getHostAddress())){
+							LOG.info("Client found on the banned IPs list.");
+							sendDisconnect(bannedMessage);
+							return;
+						}
+					}
 					if (bannedMessage != null){// bannedUsers != null){
 						if (bannedUsers.contains(reportedName)) {
+							LOG.info("Client found on the blacklist.");
 							sendDisconnect(bannedMessage);
 							return;
 						}
 					}
 					if (whitelistMessage != null){// whiteUsers != null){
 						if (whiteUsers.contains(reportedName)) {
+							LOG.info("Client found on the whitelist.");
 							sendDisconnect(whitelistMessage);
 							return;
 						}
