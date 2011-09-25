@@ -11,33 +11,42 @@ Usage: java -jar MCSignOnDoor.jar [switches]
 Command line switches:
 	-? --help
 		    Displays this message and quits
-	-p --port
+	-p --port [port]
 		    Sets the port the messenger runs on (default: %PORT%)
-	-i --address
+	-i --address [ip]
 		    Sets the ip address the messenger runs on (default: null)
-	-m --message
+	-m --message [message]
 		    Sets the message to send to connecting players (250 char max) 
 		    (default: %AWAYMSG%)
-	-w --white-message
+	-w --white-message [message]
 		    Sets the message for whitelisted players. Default: does not 
 		    differentiate between normal and whitelisted players.[1]
-	-b --black-message --banned-message
+	-b --black-message --banned-message [message]
 		    Sets the message for blacklisted players. Default: does not 
 		    differentiate between normal and blacklisted players.[1]
-	   --ipmessage
+	   --ipmessage [message]
 		    Sets the message for ip-banned players. Default: does not 
 		    differentiate between normal and ip-banned players.[1][2]
-	   --motd
+	   --motd [message]
 	   	    Sets the server list message of the day. Default: the message
 	   	    setting, truncated. (<=60 char max)
 	   --ignoreping	
-		    Sets McSod to ignore incoming pings; Server appears offline
-	   --players
+		    Sets McSod to ignore incoming pings; Server appears offline.
+	   --ignorebannedping
+		    Sets McSod to ignore incoming pings from banned IPs.
+	   --players [ratio]
 		    Sets the player ratio given in pings (in form "1/10")[3]
-	-l --log
+	-l --log [file]
 		    Supplies a log file to write to (default: does not use log file)
 	-s --silent
 		    Does not print output to the screen
+		    
+	-c --config [file]
+		    Tells McSod to read the configuration file specified. All command
+		    line switches after this one will be ignored.
+	   --outputconfig [filename]
+		    Outputs a template config file to the specified filename. This file
+		    can be edited and used with the --config command line switch.
 
 Notes:
 [1] When using special case messages (white and banned list messages), McSod 

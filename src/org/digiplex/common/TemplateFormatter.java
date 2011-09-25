@@ -1,4 +1,11 @@
 package org.digiplex.common;
+/*****************************************
+
+This class specifically is released into the 
+Public Domain by the creator, Tustin2121.
+Feel free to use it however you please.
+
+*****************************************/
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -11,7 +18,6 @@ import java.net.URL;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
 
-
 /**
  * Basically an incredibly lightweight version of the Velocity engine by the
  * Apache project.
@@ -20,6 +26,7 @@ import java.util.StringTokenizer;
 public class TemplateFormatter {
 	private StringBuilder message;
 	private Hashtable<String, String> templateVariables;
+	private boolean nullVarThrows = true;
 	
 	public TemplateFormatter(String str){
 		message = new StringBuilder(message);
@@ -29,10 +36,13 @@ public class TemplateFormatter {
 		BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
 		String line;
 		message = new StringBuilder();
-		while ((line = r.readLine()) != null){
-			message.append(line).append("\n");
+		try {
+			while ((line = r.readLine()) != null){
+				message.append(line).append("\n");
+			}
+		} finally {
+			r.close();
 		}
-		r.close();
 		templateVariables = new Hashtable<String, String>();
 	}
 	public TemplateFormatter(URI file) throws FileNotFoundException, IOException {
@@ -42,6 +52,8 @@ public class TemplateFormatter {
 		this(new File(resource.toURI()));
 	}
 	
+	public void setNullError(boolean nullVarThrows) {this.nullVarThrows = nullVarThrows;}
+	public boolean doesNullError() {return nullVarThrows;}
 	
 	public void defineVariable(String var, String value){
 		templateVariables.put(var, value);
@@ -61,7 +73,11 @@ public class TemplateFormatter {
 						if (tk.equals("%")) {
 							finalmsg.append('%'); break; //"%%" => "%"
 						}
-						finalmsg.append(templateVariables.get(token));
+						String val = templateVariables.get(tk);
+						if (val == null && nullVarThrows)
+							throw new MalformedFormatException("Token "+tk+" found, variable not set.");
+						if (val == null) val = ""; //prevent "null"s from being printed
+						finalmsg.append(val);
 						if (!st.nextToken().equals("%")) 
 							throw new MalformedFormatException("Escape % signs are mismatched.");
 					} break;

@@ -1,0 +1,44 @@
+### MCSignOnDoor configuration file
+###
+### Hashes at the start of a line are a comment, and default 
+### and empty values are commented out
+
+### Port - Sets the port McSod uses.
+%H_PORT%port = %V_PORT% 
+### IP Address - Sets the IP McSod connects to.
+%H_IP%ip = %V_IP%
+### Ignore Ping - Tells McSod to ignore server list pings
+%H_PING%ignoreping = %V_PING%
+### Away Message - The message sent to connecting players
+%H_MSG%message = %V_MSG%
+
+### Message of the Day - The message sent in response to server list pings
+%H_MOTD%motd = %V_MOTD%
+### Player Ratio - The current player / total slots ratio to report
+%H_RATIO%playerratio = %V_RATIO%
+
+### Whitelist Message - The message sent to connecting players on the whitelist
+%H_WLMSG%whitelistmessage = %V_WLMSG%
+### Whitelist File - The message sent in response to server list pings
+%H_WLF%whitelistfile = %V_WLF%
+
+### Blacklist Message - The message sent to connecting players on the whitelist
+%H_BLMSG%blacklistmessage = %V_BLMSG%
+### Blacklist File - The message sent in response to server list pings
+%H_BLF%blacklistfile = %V_BLF%
+
+### Banned IP Message - The message sent to connecting players on the whitelist
+%H_IPMSG%bannedipmessage = %V_IPMSG%
+### Banned IP File - The message sent in response to server list pings
+%H_IPF%bannedipfile = %V_IPF%
+### Ignore Banned IP Pings - Tells McSod to ignore server list pings from banned ips
+%H_IPPING%ignorebannedping = %V_IPPING%
+
+### Base File Path - The base path to your minecraft server directory. 
+### Set this instead of the File settings above to change the location of all files. 
+%H_BASE%basepath = %V_BASE%
+
+### Logfile - the file which to log events - comment out to disable
+%H_LOG%logfile = %V_LOG%
+### Silent - set to true to have nothing logged to the console
+%H_SILENT%silent = %V_SILENT%

@@ -3,9 +3,11 @@ package org.digiplex.mcsod;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -64,18 +66,26 @@ public class MCSignOnDoor {
 	private static boolean respondToPing = true, ratioSet = false;
 	
 	private static String basepath = "";//new File("").getPath()+File.separator;
+	private static String outputToConfig = null;
 	
+	private static boolean blockedIpLoaded = false;
 	private static HashSet<String> blockedIps = null;
 	private static String blockedMessage = null;
+	private static boolean ignorePingFromBlocked = false;
 	
+	private static boolean bannedUsersLoaded = false;
 	private static HashSet<String> bannedUsers = null;
 	private static String bannedMessage = null;
 	
+	private static boolean whiteUsersLoaded = false;
 	private static HashSet<String> whiteUsers = null;
 	private static String whitelistMessage = null;
 
 	public static void main(String[] args) {
 		parseCommandLine(args);
+		if (outputToConfig != null){
+			makeConfigFile(new File(outputToConfig));
+		}
 		determineDefaults();
 		
 		{//fix formatting on logger
@@ -95,22 +105,50 @@ public class MCSignOnDoor {
 		});
 		
 		//Starting server
-		LOG.info("MCSignOnDoor Client Notifier v"+VERSION+" by Tustin2121");
-		if (ip != null)
-			LOG.info("Starting server on "+ip+":"+port+" with message \""+awayMessage+"\"");
-		else 
-			LOG.info("Starting server on port "+port+" with message \""+awayMessage+"\"");
-		if (respondToPing)
-			LOG.info("Server set to respond to pings with motd \""+motdMessage+"\" and player ratio "+numplayers+"/"+maxplayers);
-		else
-			LOG.info("Server set to ignore pings.");
-		
-		if (awayMessage.length() > 80){
-			LOG.warning("Message length exceeds 80 characters. Messages don't wrap on the client, even with newline characters, and may be cut off when shown.");
-		}
-		if (ratioSet){ //this is so we're not throwing this warning when the user doesn't explicitly set a ratio
-			if ((!numplayers.matches("[0-9]+") || !maxplayers.matches("[0-9]+") || maxplayers.equals("0"))){
-				LOG.warning("Player ratio may not be shown by client. Player ratio must be a valid, non-negative fraction to be displayed to the player.");
+		{
+			LOG.info("MCSignOnDoor Client Notifier v"+VERSION+" by Tustin2121");
+			if (ip != null)
+				LOG.info("Starting server on "+ip+":"+port+" with message \""+awayMessage+"\"");
+			else 
+				LOG.info("Starting server on port "+port+" with message \""+awayMessage+"\"");
+			if (respondToPing)
+				LOG.info("Server set to respond to pings with motd \""+motdMessage+"\" and player ratio "+numplayers+"/"+maxplayers);
+			else
+				LOG.info("Server set to ignore pings.");
+			
+			if (awayMessage.length() > 80){
+				LOG.warning("Message length exceeds 80 characters. Messages don't wrap on the client, even with newline characters, and may be cut off when shown.");
+			}
+			if (ratioSet){ //this is so we're not throwing this warning when the user doesn't explicitly set a ratio
+				if ((!numplayers.matches("[0-9]+") || !maxplayers.matches("[0-9]+") || maxplayers.equals("0"))){
+					LOG.warning("Player ratio may not be shown by client. Player ratio must be a valid, non-negative fraction to be displayed to the player.");
+				}
+			}
+			
+			if (whitelistMessage != null){
+				if (!whiteUsersLoaded) {
+					LOG.warning("There was an error loading the whitelist users.");
+				} else {
+					LOG.info("Whitelist message set: "+whitelistMessage);
+					if (whiteUsers.isEmpty()) LOG.warning("There are no entries in the whitelist.");
+				}
+			}
+			if (bannedMessage != null){
+				if (!bannedUsersLoaded) {
+					LOG.warning("There was an error loading the banned users.");
+				} else {
+					LOG.info("Banned list message set: "+bannedMessage);
+					if (bannedUsers.isEmpty()) LOG.warning("There are no entries in the banned users list.");
+				}
+			}
+			if (blockedMessage != null){
+				if (!blockedIpLoaded) {
+					LOG.warning("There was an error loading the banned IPs.");
+				} else if (blockedMessage != bannedMessage) {
+					//yes, string == string, because if the banned message is not explicitly set, it should be the same object
+					LOG.info("Banned IP message set: "+blockedMessage);
+					if (blockedIps.isEmpty()) LOG.warning("There are no entries in the banned IPs list.");
+				}
 			}
 		}
 		
@@ -251,6 +289,7 @@ public class MCSignOnDoor {
 		}
 		try {
 			blockedIps.addAll(loadListing(basepath + filename));
+			blockedIpLoaded = true;
 		} catch (FileNotFoundException ex){
 			System.out.println("Could not find file: "+ex.getMessage());
 		} catch (IOException ex){
@@ -265,6 +304,7 @@ public class MCSignOnDoor {
 		}
 		try {
 			bannedUsers.addAll(loadListing(basepath + filename));
+			bannedUsersLoaded = true;
 		} catch (FileNotFoundException ex){
 			System.out.println("Could not find file: "+ex.getMessage());
 		} catch (IOException ex){
@@ -279,6 +319,7 @@ public class MCSignOnDoor {
 		}
 		try {
 			whiteUsers.addAll(loadListing(basepath + filename));
+			whiteUsersLoaded = true;
 		} catch (FileNotFoundException ex){
 			System.out.println("Could not find file: "+ex.getMessage());
 		} catch (IOException ex){
@@ -313,6 +354,8 @@ public class MCSignOnDoor {
 					} finally {
 						System.exit(0);
 					}
+				} else if (arg.equalsIgnoreCase("--outputconfig")){
+					outputToConfig = argbuffer.pop();
 				} else if (arg.equalsIgnoreCase("-c") || arg.equalsIgnoreCase("--cfg") || arg.equalsIgnoreCase("--config")){
 					parseConfigFile(new File(argbuffer.pop()));
 					break; //parse only the config
@@ -335,6 +378,8 @@ public class MCSignOnDoor {
 					if (!setBannedMessage(argbuffer.pop())) { System.exit(-1); }
 				} else if (arg.equalsIgnoreCase("--ipmessage")){
 					if (!setIpMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("--ignorebannedping")){
+					ignorePingFromBlocked = true;
 				} else if (arg.equalsIgnoreCase("--basepath")){
 					basepath = new File(argbuffer.pop()).getPath()+File.separator;
 				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
@@ -393,10 +438,16 @@ public class MCSignOnDoor {
 					if (!setWhiteMessage(p.getProperty(key))) { System.exit(-1); }
 				} else if (key.equalsIgnoreCase("blacklistmessage") || key.equalsIgnoreCase("bannedlistmessage")){
 					if (!setBannedMessage(p.getProperty(key))) { System.exit(-1); }
+				} else if (key.equalsIgnoreCase("bannedipmessage") || key.equalsIgnoreCase("bannedlistmessage")){
+					if (!setIpMessage(p.getProperty(key))) { System.exit(-1); }
 				} else if (key.equalsIgnoreCase("whitelistfile")){
 					loadWhiteList(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("blacklistfile") || key.equalsIgnoreCase("bannedlistfile")){
 					loadBlackList(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("bannedipfile")){
+					loadBlackList(p.getProperty(key));
+				} else if (key.equalsIgnoreCase("ignorebannedping")){
+					ignorePingFromBlocked = Boolean.parseBoolean(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("basepath")){
 					basepath = new File(p.getProperty(key)).getPath()+File.separator;
 				} else if (key.equalsIgnoreCase("logfile")){
@@ -415,6 +466,78 @@ public class MCSignOnDoor {
 			}
 		} catch (IOException e){
 			System.out.println("IOException while attempting to load config file: "+e.getMessage());
+		}
+	}
+	protected static void makeConfigFile(File config) {
+		try {
+			System.out.println("Configuration file write requested. Started...");
+			TemplateFormatter tf = new TemplateFormatter(MCSignOnDoor.class.getResource("config.template"));
+			
+			tf.defineVariable("H_PORT", (port == 25565)?"#":"");
+			tf.defineVariable("V_PORT", Integer.toString(port));
+			
+			tf.defineVariable("H_IP", (ip == null)?"#":"");
+			tf.defineVariable("V_IP", (ip == null)?"":ip.getHostAddress());
+			
+			tf.defineVariable("H_PING", (respondToPing)?"#":"");
+			tf.defineVariable("V_PING", Boolean.toString(!respondToPing));
+			
+			tf.defineVariable("H_MSG", "");
+			tf.defineVariable("V_MSG", awayMessage);
+			
+			tf.defineVariable("H_MOTD", (motdMessage == null)?"#":"");
+			tf.defineVariable("V_MOTD", (motdMessage == null)?"":motdMessage);
+			
+			tf.defineVariable("H_RATIO", (!ratioSet)?"#":"");
+			tf.defineVariable("V_RATIO", numplayers+"/"+maxplayers);
+			
+			tf.defineVariable("H_WLMSG", (whitelistMessage == null)?"#":"");
+			tf.defineVariable("V_WLMSG", (whitelistMessage == null)?"":whitelistMessage);
+			
+			tf.defineVariable("H_WLF", "#"); 
+			//this is technically a bug, since it's not using the inputted file, but whatever
+			tf.defineVariable("V_WLF", WHITELIST_NAME_FILE);
+			
+			tf.defineVariable("H_BLMSG", (bannedMessage == null)?"#":"");
+			tf.defineVariable("V_BLMSG", (bannedMessage == null)?"":bannedMessage);
+			
+			tf.defineVariable("H_BLF", "#"); //this is technically a bug, see above
+			tf.defineVariable("V_BLF", BLACKLIST_NAME_FILE);
+			
+			tf.defineVariable("H_IPMSG", (blockedMessage == null)?"#":"");
+			tf.defineVariable("V_IPMSG", (blockedMessage == null)?"":blockedMessage);
+			
+			tf.defineVariable("H_IPF", "#"); //this is technically a bug, see above
+			tf.defineVariable("V_IPF", BLACKLIST_IP_FILE);
+			
+			tf.defineVariable("H_IPPING", (!ignorePingFromBlocked)?"#":"");
+			tf.defineVariable("V_IPPING", Boolean.toString(ignorePingFromBlocked));
+			
+			tf.defineVariable("H_BASE", (basepath.isEmpty())?"#":"");
+			tf.defineVariable("V_BASE", basepath);
+			
+			tf.defineVariable("H_LOG", "#");
+			//this is technically a bug, since it's not using the inputted filename, but whatever
+			tf.defineVariable("V_LOG", DEFAULT_LOGFILE);
+			
+			tf.defineVariable("H_SILENT", "#"); //also technically a bug, but again, whatever
+			tf.defineVariable("V_SILENT", "true");
+			
+			BufferedWriter w = new BufferedWriter(new FileWriter(config));
+			try {
+				w.write(tf.execute());
+				System.out.println("Completed.");
+			} catch (MalformedFormatException e) {
+				System.out.println("===PROGRAMMER ERROR=== "+e.getMessage());
+			} finally {
+				w.close();
+			}
+		} catch (FileNotFoundException e) {
+			System.out.println("===PROGRAMMER ERROR=== "+e.getMessage());
+		} catch (IOException e) {
+			System.out.println("Error writing config file: "+e.getMessage());
+		} catch (URISyntaxException e) {
+			System.out.println("===PROGRAMMER ERROR=== "+e.getMessage());
 		}
 	}
 	
@@ -470,16 +593,23 @@ public class MCSignOnDoor {
 		}
 		
 		@Override public void run() {
+			StringBuilder SBL = new StringBuilder();
 			try {
 				byte[] inbyte = new byte[256];
-
+				boolean isBlocked = (blockedMessage != null) && (!blockedIps.isEmpty() &&
+						blockedIps.contains(sock.getInetAddress().getHostAddress()));
+				
 				in.read(inbyte, 0, 1); //read connect byte
 				if (inbyte[0] == (byte)0xFE) { //Minecraft 1.8 Server Ping
 					if (!respondToPing) {
-						LOG.info("Client pinging server. Ignoring.");
+						SBL.append("Client pinging server. Ignoring.");
 						return;
 					}
-					LOG.info("Client pinging server. Responding.");
+					if (ignorePingFromBlocked && isBlocked){
+						SBL.append("Client found on the banned IPs list pinging server. Ignoring.");
+						return;
+					}
+					SBL.append("Client pinging server. Responding.");
 					sendInfo(motdMessage, numplayers, maxplayers);
 				} else {
 					in.read(inbyte, 1, 2); //read message length
@@ -492,36 +622,35 @@ public class MCSignOnDoor {
 						CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
 						CharBuffer cb = d.decode(bb);
 						reportedName = cb.toString();
-						LOG.info("Reported client name: "+ reportedName +". Turning away.");
+						SBL.append("Reported client name: ").append(reportedName);// +". Turning away.");
 					}
-					if (blockedMessage != null){
-						if (!blockedIps.isEmpty() &&
-								blockedIps.contains(sock.getInetAddress().getHostAddress())){
-							LOG.info("Client found on the banned IPs list.");
-							sendDisconnect(bannedMessage);
-							return;
-						}
+					if (isBlocked){
+						SBL.append(". Client found on the banned IPs list. The bastard.");
+						sendDisconnect(blockedMessage);
+						return;
 					}
 					if (bannedMessage != null){// bannedUsers != null){
 						if (bannedUsers.contains(reportedName)) {
-							LOG.info("Client found on the blacklist.");
+							SBL.append(". Client found on the blacklist. Shooing.");
 							sendDisconnect(bannedMessage);
 							return;
 						}
 					}
 					if (whitelistMessage != null){// whiteUsers != null){
 						if (whiteUsers.contains(reportedName)) {
-							LOG.info("Client found on the whitelist.");
+							SBL.append(". Client found on the whitelist. Giving candy.");
 							sendDisconnect(whitelistMessage);
 							return;
 						}
 					}
 					
+					SBL.append(". Turning away.");
 					sendDisconnect(awayMessage);
 				}
 			} catch (IOException e) {
 				LOG.log(Level.SEVERE, "IOException while processing client!", e);
 			} finally {
+				LOG.info(SBL.toString());
 				try {sock.close();} catch (IOException e){}
 			}
 		}
