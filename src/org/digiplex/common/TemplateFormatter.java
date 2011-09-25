@@ -1,9 +1,10 @@
 package org.digiplex.common;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -25,12 +26,13 @@ public class TemplateFormatter {
 		templateVariables = new Hashtable<String, String>();
 	}
 	public TemplateFormatter(File file) throws FileNotFoundException, IOException{
-		BufferedReader r = new BufferedReader(new FileReader(file));
+		BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
 		String line;
 		message = new StringBuilder();
 		while ((line = r.readLine()) != null){
 			message.append(line).append("\n");
 		}
+		r.close();
 		templateVariables = new Hashtable<String, String>();
 	}
 	public TemplateFormatter(URI file) throws FileNotFoundException, IOException {
@@ -45,18 +47,44 @@ public class TemplateFormatter {
 		templateVariables.put(var, value);
 	}
 	
-	public String execute(){
+	public String execute() throws MalformedFormatException{
 		StringBuilder finalmsg = new StringBuilder();
-		StringTokenizer st = new StringTokenizer(message.toString(), "%");
+		StringTokenizer st = new StringTokenizer(message.toString(), "%", true);
 		for (boolean literal = true; st.hasMoreTokens(); literal = !literal){
-			if (literal){
-				finalmsg.append(st.nextToken());
+			String token = st.nextToken();
+			if (token.length() > 1){
+				finalmsg.append(token);
 			} else {
-				String token = st.nextToken();
-				if (token.isEmpty()) finalmsg.append('%'); //"%%" => "%"
-				else finalmsg.append(templateVariables.get(token));
+				switch(token.charAt(0)){
+					case '%': {
+						String tk = st.nextToken();
+						if (tk.equals("%")) {
+							finalmsg.append('%'); break; //"%%" => "%"
+						}
+						finalmsg.append(templateVariables.get(token));
+						if (!st.nextToken().equals("%")) 
+							throw new MalformedFormatException("Escape % signs are mismatched.");
+					} break;
+//					case '&': {
+//						String tk = st.nextToken();
+//						Character.
+//					} break;
+					default:
+						finalmsg.append(token);
+				}
+				
+				
+				
 			}
 		}
 		return finalmsg.toString();
+	}
+	
+	public static class MalformedFormatException extends Exception {
+		private static final long serialVersionUID = 2357634760741327752L;
+		public MalformedFormatException() {super();}
+		public MalformedFormatException(String message, Throwable cause) {super(message, cause);}
+		public MalformedFormatException(String message) {super(message);}
+		public MalformedFormatException(Throwable cause) {super(cause);}
 	}
 }

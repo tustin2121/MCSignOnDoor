@@ -42,6 +42,7 @@ import java.util.regex.Pattern;
 
 import org.digiplex.common.ByteBuilder;
 import org.digiplex.common.TemplateFormatter;
+import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 
 public class MCSignOnDoor {
@@ -307,6 +308,8 @@ public class MCSignOnDoor {
 						System.out.println("Error while printing helpfile: "+ ex.getMessage());
 					} catch (URISyntaxException e) {
 						System.out.println("Error while finding helpfile: "+ e.getMessage());
+					} catch (MalformedFormatException e) {
+						System.out.println("===PROGRAMMER ERROR=== "+e.getMessage());
 					} finally {
 						System.exit(0);
 					}

@@ -29,7 +29,7 @@ Command line switches:
 		    differentiate between normal and ip-banned players.[1][2]
 	   --motd
 	   	    Sets the server list message of the day. Default: the message
-	   	    setting, truncated. (≤60 char max)
+	   	    setting, truncated. (<=60 char max)
 	   --ignoreping	
 		    Sets McSod to ignore incoming pings; Server appears offline
 	   --players
