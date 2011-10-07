@@ -49,7 +49,7 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.6";
+	private static final String VERSION = "1.6.1";
 	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
 	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
 	private static final String WHITELIST_NAME_FILE = "white-list.txt";
@@ -335,7 +335,7 @@ public class MCSignOnDoor {
 		try {
 			while(!argbuffer.isEmpty()){
 				String arg = argbuffer.pop();
-				arg = arg.replace('/', '-');
+				//arg = arg.replace('/', '-');
 				if (arg.equalsIgnoreCase("--help") || arg.equalsIgnoreCase("-?") || arg.equalsIgnoreCase("--version")){
 					try {
 						TemplateFormatter tf = new TemplateFormatter(
@@ -384,7 +384,7 @@ public class MCSignOnDoor {
 					basepath = new File(argbuffer.pop()).getPath()+File.separator;
 				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
 					String logfilename;
-					if (!argbuffer.peek().replace('/', '-').startsWith("-")){
+					if (!argbuffer.peek().startsWith("-")){
 						logfilename = argbuffer.pop();
 					} else {
 						logfilename = DEFAULT_LOGFILE;

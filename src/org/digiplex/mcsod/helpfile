@@ -71,6 +71,7 @@ Notes:
 
 Usage examples:
 java -jar MCSignOnDoor
+java -jar MCSignOnDoor -c mcsod.cfg
 java -jar MCSignOnDoor -m "The server is down for maintenance."
 java -jar MCSignOnDoor -ip 192.168.1.1 -m "Still waiting for bukkit to 
 	upgrade..."
