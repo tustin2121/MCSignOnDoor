@@ -12,6 +12,9 @@
 ### Away Message - The message sent to connecting players
 %H_MSG%message = %V_MSG%
 
+### Sentry Mode - When true, McSod will exit when someone connects.
+%H_SNTRY%sentrymode = %V_SNTRY%
+
 ### Message of the Day - The message sent in response to server list pings
 %H_MOTD%motd = %V_MOTD%
 ### Player Ratio - The current player / total slots ratio to report

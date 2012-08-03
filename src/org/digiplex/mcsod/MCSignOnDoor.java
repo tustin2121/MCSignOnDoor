@@ -16,6 +16,7 @@ import java.net.BindException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -49,7 +50,7 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.6.1";
+	private static final String VERSION = "1.7";
 	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
 	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
 	private static final String WHITELIST_NAME_FILE = "white-list.txt";
@@ -58,6 +59,8 @@ public class MCSignOnDoor {
 	private static ServerSocket serve;
 	private static int port = 25565;
 	private static InetAddress ip = null;
+	
+	private static boolean sentryMode = false;
 	
 	private static String awayMessage = "The server is not currently running.";
 	
@@ -116,8 +119,11 @@ public class MCSignOnDoor {
 			else
 				LOG.info("Server set to ignore pings.");
 			
+			if (sentryMode)
+				LOG.info("Server set to sentry mode, will exit when someone connects.");
+			
 			if (awayMessage.length() > 80){
-				LOG.warning("Message length exceeds 80 characters. Messages don't wrap on the client, even with newline characters, and may be cut off when shown.");
+				LOG.warning("Message length exceeds 80 characters. You may add newlines by using the sequence \"\\n\" in a message.");
 			}
 			if (ratioSet){ //this is so we're not throwing this warning when the user doesn't explicitly set a ratio
 				if ((!numplayers.matches("[0-9]+") || !maxplayers.matches("[0-9]+") || maxplayers.equals("0"))){
@@ -163,6 +169,9 @@ public class MCSignOnDoor {
 					Socket s = serve.accept();
 					LOG.info("Received connection from "+s.getInetAddress().getHostAddress());
 					new ResponderThread(s).start();
+				} catch (SocketException ex) {
+					if (!serve.isClosed()) //if the socket is just closing, ignore this
+						LOG.log(Level.SEVERE, "SocketException while accepting client!", ex);
 				} catch (IOException e){
 					LOG.log(Level.SEVERE, "IOException while accepting client!", e);
 				}
@@ -189,7 +198,7 @@ public class MCSignOnDoor {
 			return false;
 		}
 		if (msg.endsWith("&")){
-			System.out.println("Message ends with &, which is an incomplete color code and will crash the client.");
+			System.out.println("Message ends with &, which is an incomplete color code.");
 			return false;
 		}
 		return true;
@@ -202,7 +211,8 @@ public class MCSignOnDoor {
 			Matcher m = p.matcher(away);
 			away = m
 				.replaceAll("!")
-				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2") //thanks to FrozenBrain for this code
+				.replaceAll("\\\\n", "\n"); //translate literal \n to actual new lines
 		}
 		awayMessage = away;
 		return true;
@@ -214,7 +224,8 @@ public class MCSignOnDoor {
 			Matcher m = p.matcher(away);
 			away = m
 				.replaceAll("!")
-				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2") //thanks to FrozenBrain for this code
+				.replaceAll("\\\\n", "\n"); //translate literal \n to actual new lines
 		}
 		bannedMessage = away;
 		return true;
@@ -226,7 +237,8 @@ public class MCSignOnDoor {
 			Matcher m = p.matcher(away);
 			away = m
 				.replaceAll("!")
-				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2") //thanks to FrozenBrain for this code
+				.replaceAll("\\\\n", "\n"); //translate literal \n to actual new lines
 		}
 		blockedMessage = away;
 		return true;
@@ -238,7 +250,8 @@ public class MCSignOnDoor {
 			Matcher m = p.matcher(away);
 			away = m
 				.replaceAll("!")
-				.replaceAll("(&([a-f0-9]))", "\u00A7$2"); //thanks to FrozenBrain for this code
+				.replaceAll("(&([a-f0-9]))", "\u00A7$2") //thanks to FrozenBrain for this code
+				.replaceAll("\\\\n", "\n"); //translate literal \n to actual new lines
 		}
 		whitelistMessage = away;
 		return true;
@@ -252,7 +265,8 @@ public class MCSignOnDoor {
 			Pattern p = Pattern.compile("\\\\\\!"); // "\\\!" - finding "\!"
 			Matcher m = p.matcher(motd);
 			motd = m
-				.replaceAll("!");
+				.replaceAll("!")
+				.replaceAll("\\n", ""); //remove newlines from the motd message
 		}
 		motdMessage = motd;
 		return true;
@@ -382,6 +396,8 @@ public class MCSignOnDoor {
 					ignorePingFromBlocked = true;
 				} else if (arg.equalsIgnoreCase("--basepath")){
 					basepath = new File(argbuffer.pop()).getPath()+File.separator;
+				} else if (arg.equalsIgnoreCase("--sentrymode")){
+					sentryMode = true;
 				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
 					String logfilename;
 					if (!argbuffer.peek().startsWith("-")){
@@ -450,6 +466,8 @@ public class MCSignOnDoor {
 					ignorePingFromBlocked = Boolean.parseBoolean(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("basepath")){
 					basepath = new File(p.getProperty(key)).getPath()+File.separator;
+				} else if (key.equalsIgnoreCase("sentrymode")){
+					sentryMode = Boolean.parseBoolean(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("logfile")){
 					String logfilename = p.getProperty(key);
 					Logger rootlog = Logger.getLogger("");
@@ -484,6 +502,9 @@ public class MCSignOnDoor {
 			
 			tf.defineVariable("H_MSG", "");
 			tf.defineVariable("V_MSG", awayMessage);
+			
+			tf.defineVariable("H_SNTRY", (!sentryMode)?"#":"");
+			tf.defineVariable("V_SNTRY", Boolean.toString(sentryMode));
 			
 			tf.defineVariable("H_MOTD", (motdMessage == null)?"#":"");
 			tf.defineVariable("V_MOTD", (motdMessage == null)?"":motdMessage);
@@ -550,11 +571,11 @@ public class MCSignOnDoor {
 				System.exit(-1);
 			}
 		} else {
-			motdMessage = awayMessage.replaceAll("(\u00A7([a-f0-9]))", "");
+			motdMessage = awayMessage.replaceAll("(\u00A7([a-f0-9]))", "").replaceAll("\\n", " ");
 			int allowedlen = 64 - (2+numplayers.length()+maxplayers.length());
 			if (motdMessage.length() > allowedlen){
-				motdMessage = motdMessage.substring(0, 64-allowedlen);
-				if (motdMessage.length() + 4 > awayMessage.length()) {//if the message was truncated substantially, add ellipses
+				motdMessage = motdMessage.substring(0, allowedlen);
+				if (motdMessage.length() + 4 < awayMessage.length()) {//if the message was truncated substantially, add ellipses
 					motdMessage = motdMessage.substring(0, motdMessage.length()-3).concat("...");
 				}
 			}
@@ -593,6 +614,7 @@ public class MCSignOnDoor {
 		}
 		
 		@Override public void run() {
+			boolean sentryActivated = false;
 			StringBuilder SBL = new StringBuilder();
 			try {
 				byte[] inbyte = new byte[256];
@@ -611,19 +633,80 @@ public class MCSignOnDoor {
 					}
 					SBL.append("Client pinging server. Responding.");
 					sendInfo(motdMessage, numplayers, maxplayers);
-				} else {
-					in.read(inbyte, 1, 2); //read message length
-					int len = parseChar(inbyte, 1);
-					in.read(inbyte, 3, len*2); //read message
 					
-					String reportedName;
-					{
-						ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
-						CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
-						CharBuffer cb = d.decode(bb);
-						reportedName = cb.toString();
-						SBL.append("Reported client name: ").append(reportedName);// +". Turning away.");
+				} else if (inbyte[0] == (byte)0x02) { //Handshake, pre-login
+					in.read(inbyte, 1, 1); //read "protocol version", byte length
+					int version = inbyte[1];
+					String reportedName = null, reportedServer = null; int reportedPort = 0;
+					
+					switch (version) { //hey, we finally have something to test against!
+					//CASE 0: this is for pre-version 1.3.1, when there was no version number
+					case 0: { 
+						in.read(inbyte, 2, 1); //read another byte, for message length
+						int len = parseChar(inbyte, 1);
+						in.read(inbyte, 3, len*2); //read message
+						
+						{
+							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
+							CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
+							CharBuffer cb = d.decode(bb);
+							reportedName = cb.toString();
+							SBL.append("Reported client name: ").append(reportedName);// +". Turning away.");
+						}
+					} break;
+					
+					//CASE 39: this is for version 1.3.1, introduction of the protocol version
+					case 39: {
+						in.read(inbyte, 2, 2); //read 16-byte number, message length
+						int len = parseChar(inbyte, 2);
+						in.read(inbyte, 5, len*2); //read username
+						{
+							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 5, (len+1)*2+1));
+							CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
+							CharBuffer cb = d.decode(bb);
+							reportedName = cb.toString();
+							SBL.append("Reported client name: \"").append(reportedName).append('"');
+						}
+						
+						Arrays.fill(inbyte, (byte)0); //clear the buffer for the next read
+						
+						in.read(inbyte, 0, 2); //read 16-byte number, message length
+						len = parseChar(inbyte, 0);
+						in.read(inbyte, 3, len*2); //read server name
+						{
+							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 3, (len+1)*2+1));
+							CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
+							CharBuffer cb = d.decode(bb);
+							reportedServer = cb.toString();
+							SBL.append(", Server name: \"").append(reportedServer).append('"');
+						}
+						
+						in.read(inbyte, 0, 4);
+						reportedPort = parseInt(inbyte, 0);
+						SBL.append(", Port: ").append(reportedPort);
+						
+					} break;
+					
+					//DEFAULT CASE: This is for when the protocol is updated and we have no idea what to do with it.
+					default: {
+						SBL.append("Client with unknown version (").append(version).append(") of Handshake Protocol attempting login! Printing raw data:\n");
+						in.read(inbyte, 2, 250);
+						StringBuffer charData = new StringBuffer();
+						for (int i = 0; i < inbyte.length; i++) {
+							SBL.append(String.format("%2X ", inbyte[i]));
+							if (Character.isLetterOrDigit(inbyte[i]))
+								charData.append(inbyte[i]);
+							else
+								charData.append(' ');
+						}
+						SBL.append('\n').append("Readable items: ").append(charData).append("\nFeel free to give tustin2121 this information on the bukkit thread. :)");
+						
+						sendDisconnect(awayMessage);
+						return;
 					}
+					}
+					
+					
 					if (isBlocked){
 						SBL.append(". Client found on the banned IPs list. The bastard.");
 						sendDisconnect(blockedMessage);
@@ -640,18 +723,25 @@ public class MCSignOnDoor {
 						if (whiteUsers.contains(reportedName)) {
 							SBL.append(". Client found on the whitelist. Giving candy.");
 							sendDisconnect(whitelistMessage);
+							sentryActivated = true;
 							return;
 						}
 					}
 					
 					SBL.append(". Turning away.");
 					sendDisconnect(awayMessage);
-				}
+					sentryActivated = true;
+				} //*/
 			} catch (IOException e) {
 				LOG.log(Level.SEVERE, "IOException while processing client!", e);
 			} finally {
 				LOG.info(SBL.toString());
 				try {sock.close();} catch (IOException e){}
+			}
+			
+			if (sentryMode && sentryActivated) {
+				LOG.info("As per Sentry Mode, now shutting down.");
+				System.exit(12);
 			}
 		}
 		
@@ -661,6 +751,21 @@ public class MCSignOnDoor {
 			
 			byte[] b = Arrays.copyOfRange(arr, off, off+LEN);
 			short value = 0;
+			
+			for (int i = 0; i < LEN; i++) {
+				int offset = (b.length - 1 - i) * 8;
+				long v = 0xFF & b[i]; //see note above
+				value |= v << offset;
+			}
+			return value;
+		}
+		
+		public int parseInt(byte[] arr, int off){
+			final int LEN = 4; //long are 8 bytes long
+			if (arr.length < LEN) throw new InvalidParameterException();
+			
+			byte[] b = Arrays.copyOfRange(arr, off, off+LEN);
+			int value = 0;
 			
 			for (int i = 0; i < LEN; i++) {
 				int offset = (b.length - 1 - i) * 8;

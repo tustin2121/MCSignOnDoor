@@ -40,7 +40,11 @@ Command line switches:
 		    Supplies a log file to write to (default: does not use log file)
 	-s --silent
 		    Does not print output to the screen
-		    
+	   --sentrymode
+		    When someone not banned tries to connect to the server, McSod 
+		    will exit immediately with the return value 12. Useful in 
+		    conjunction with a looping script.
+
 	-c --config [file]
 		    Tells McSod to read the configuration file specified. All command
 		    line switches after this one will be ignored.
