@@ -13,7 +13,7 @@ Under the following conditions:
     * Attribution - You must attribute the work to Tustin2121 in the 
         help print out or other about text (but not in any way that 
         suggests that he endorses you or your use of the work)
-    * Noncommercial - You may not use this work for commercial purposes
+    * Noncommercial - You may not use this work for commercial purposes**
     * Share Alike - If you alter, transform, or build upon this work, 
         you may distribute the resulting work only under the same or 
         similar license to this one.
@@ -34,6 +34,19 @@ With the understanding that:
     * Notice — For any reuse or distribution, you must make clear to 
         others the license terms of this work. The best way to do this 
         is with a link to the web page linked above.
+
+**NOTE: This does not bar someone who runs a paid server from using
+        this tool; this does bar people from selling it for profit.
+        This includes paid tools: paid tools are forbidden to offer
+        McSod as or as part of a premium add-on. This does not forbid 
+        them from including it as part of the base of a paid tool.
+        In this case, tool creators should point out that McSod is
+        free to find and use on its own from the Bukkit forums.
+NOTE: Those who wish to use this tool as a function of their own work
+      need not put their own code under this license. Using this work
+      in this way is considered using it as a library. However, they 
+      must credit Tustin2121 somewhere, even if it is only allowing 
+      the built in startup text to be shown to the user.
 
 ======================================================================
 Legal License:
