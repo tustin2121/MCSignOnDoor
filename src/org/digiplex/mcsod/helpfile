@@ -77,6 +77,8 @@ Usage examples:
 java -jar MCSignOnDoor
 java -jar MCSignOnDoor -c mcsod.cfg
 java -jar MCSignOnDoor -m "The server is down for maintenance."
+java -jar MCSignOnDoor -m "OH! You woke me up!\nGive me a minute to 
+wake back up and reconnect!" --sentrymode
 java -jar MCSignOnDoor -ip 192.168.1.1 -m "Still waiting for bukkit to 
 	upgrade..."
 java -jar MCSignOnDoor -p 54321 --message "The &eMinecraftWB &fserver has
