@@ -50,7 +50,7 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.7";
+	private static final String VERSION = "1.7.1";
 	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
 	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
 	private static final String WHITELIST_NAME_FILE = "white-list.txt";
@@ -353,18 +353,22 @@ public class MCSignOnDoor {
 				if (arg.equalsIgnoreCase("--help") || arg.equalsIgnoreCase("-?") || arg.equalsIgnoreCase("--version")){
 					try {
 						TemplateFormatter tf = new TemplateFormatter(
-								MCSignOnDoor.class.getResource("helpfile"));
+								MCSignOnDoor.class.getResourceAsStream("helpfile"));
 						tf.defineVariable("VERSION", VERSION);
 						tf.defineVariable("PORT", Integer.toString(port));
 						tf.defineVariable("AWAYMSG", awayMessage);
 						String s = tf.execute();
 						System.out.println(s);
+					} catch (FileNotFoundException e) {
+						System.out.println("Error while finding helpfile: "+ e.getMessage());
 					} catch (IOException ex){
 						System.out.println("Error while printing helpfile: "+ ex.getMessage());
-					} catch (URISyntaxException e) {
-						System.out.println("Error while finding helpfile: "+ e.getMessage());
 					} catch (MalformedFormatException e) {
 						System.out.println("===PROGRAMMER ERROR=== "+e.getMessage());
+					} catch (Exception e) {
+						//because the finally exits, we need to catch remaining errors here.
+						System.err.println("UNHANDLED ERROR while processing helpfile.");
+						e.printStackTrace();
 					} finally {
 						System.exit(0);
 					}

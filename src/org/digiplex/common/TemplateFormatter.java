@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -34,6 +35,19 @@ public class TemplateFormatter {
 	}
 	public TemplateFormatter(File file) throws FileNotFoundException, IOException{
 		BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+		String line;
+		message = new StringBuilder();
+		try {
+			while ((line = r.readLine()) != null){
+				message.append(line).append("\n");
+			}
+		} finally {
+			r.close();
+		}
+		templateVariables = new Hashtable<String, String>();
+	}
+	public TemplateFormatter(InputStream resourceStream) throws IOException {
+		BufferedReader r = new BufferedReader(new InputStreamReader(resourceStream, "UTF-8"));
 		String line;
 		message = new StringBuilder();
 		try {
