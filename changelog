@@ -1,0 +1,5 @@
+- Fixed a long standing bug where if a config file was used...
+  - ...to specify an ip banned list, it would instead load it into the blacklist, thereby making banned ips not function.
+  - ...to enable pings, it would instead disable pings, and vice-versa.
+- Changed how the config file works, using heierarcy-type keys.
+- Added encryption spoofing (not actual encryption, but the start of the handshake until we can get to a legal kick point)

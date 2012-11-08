@@ -36,6 +36,15 @@ Command line switches:
 		    Sets McSod to ignore incoming pings from banned IPs.
 	   --players [ratio]
 		    Sets the player ratio given in pings (in form "1/10")[3]
+
+	-v --reported-version [versionstring]
+	        Sets the version reported over motd. Default: %VERDEF%
+	   --motd-version [version]
+	        Sets the version of motd to send. Defaults to latest. [4]
+	   --act-as-protocol [version]
+		    Sets which protocol version to act as. Defaults to latest.
+		    (Warning: advanced functionality - you don't need this)
+		    
 	-l --log [file]
 		    Supplies a log file to write to (default: does not use log file)
 	-s --silent
@@ -63,6 +72,9 @@ Notes:
 [3] When setting the player ratio to show, non-numbers and a ratio with 0 max 
     players will display as "???" on the client. Player ratio also cuts into 
     the max length of the motd setting.
+
+[4] Minecraft is backwards compatible with previous motd versions, but they are
+    not forward compatible. As of MC version 1.4.2, the version is 1.
 
 [*] Some command lines treat the bang (!) as a special command character.
     If you would like to use a bang in your server message, be sure to escape

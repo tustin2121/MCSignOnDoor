@@ -50,7 +50,10 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.7.1";
+	private static final String VERSION = "1.8";
+	private static final int CURRENT_PROTOCOL_VERSION = 47;
+	private static final int CURRENT_MOTD_VERSION = 1;
+	
 	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
 	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
 	private static final String WHITELIST_NAME_FILE = "white-list.txt";
@@ -59,6 +62,10 @@ public class MCSignOnDoor {
 	private static ServerSocket serve;
 	private static int port = 25565;
 	private static InetAddress ip = null;
+	
+	private static int motdVersion = CURRENT_MOTD_VERSION;
+	private static int actAsVersion = -1;
+	private static String reportedVersionNumber = "0.0.0";
 	
 	private static boolean sentryMode = false;
 	
@@ -191,6 +198,12 @@ public class MCSignOnDoor {
 		}
 	}
 	
+	private static int getKnownProtocolVersion(int v) {
+		if (v >= 47) return 47; //addition of encryption
+		if (v >= 39) return 39; //change of handshake and login request, and also unicode.
+		return 0; //before things reported protocol versions
+	}
+	
 	///////////////////////////////////////////////////////////////////////////////////
 	private static boolean checkMessageForSignOnDoor(String msg){
 		if (msg.length() > 250){
@@ -269,6 +282,22 @@ public class MCSignOnDoor {
 				.replaceAll("\\n", ""); //remove newlines from the motd message
 		}
 		motdMessage = motd;
+		return true;
+	}
+	public static boolean setMotdVersion(int v) {
+		switch (v) {
+		case 0: //first version of the motd, with string and player ratio
+		case 1: //second version, added server version number
+			motdVersion = v;
+			return true;
+		default:
+			System.out.println("Invalid or unrecognized MOTD version!");
+			return false;
+		}
+	}
+	public static boolean setReportedVersion(String ver) {
+		//TODO test if this works, and what works
+		reportedVersionNumber = ver;
 		return true;
 	}
 	public static boolean setPlayerRatio(String ratio){
@@ -357,6 +386,7 @@ public class MCSignOnDoor {
 						tf.defineVariable("VERSION", VERSION);
 						tf.defineVariable("PORT", Integer.toString(port));
 						tf.defineVariable("AWAYMSG", awayMessage);
+						tf.defineVariable("VERDEF", reportedVersionNumber);
 						String s = tf.execute();
 						System.out.println(s);
 					} catch (FileNotFoundException e) {
@@ -387,6 +417,8 @@ public class MCSignOnDoor {
 					if (!setAwayMessage(argbuffer.pop())) { System.exit(-1); }
 				} else if (arg.equalsIgnoreCase("--motd")){
 					if (!setMotdMessage(argbuffer.pop())) { System.exit(-1); }
+				} else if (arg.equalsIgnoreCase("-v") || arg.equalsIgnoreCase("--reported-version")){
+					if (!setReportedVersion(argbuffer.pop())) { System.exit(-1); }
 				} else if (arg.equalsIgnoreCase("--players") || arg.equalsIgnoreCase("--ratio")){
 					if (!setPlayerRatio(argbuffer.pop())) { System.exit(-1); }
 				} else if (arg.equalsIgnoreCase("-w") || arg.equalsIgnoreCase("--whitemessage") || arg.equalsIgnoreCase("--whitelist-message")){
@@ -417,10 +449,16 @@ public class MCSignOnDoor {
 					for (Handler h : hs){
 						if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
 					}
+				} else if (arg.equalsIgnoreCase("--motd-version")){
+					if (!setMotdVersion(Integer.parseInt(argbuffer.pop()))) {System.exit(-1);}
+				} else if (arg.equalsIgnoreCase("--act-as-protocol")){
+					actAsVersion = getKnownProtocolVersion(Integer.parseInt(argbuffer.pop()));
 				} else {
 					System.out.println("Unknown command line switch \""+arg+"\". Continuing...");
 				}
 			} //end while
+		} catch (NumberFormatException e) {
+			System.out.println("Invalid format for an argument: expected integer but found something else!");
 		} catch (SecurityException e) {
 			e.printStackTrace();
 			System.out.println("You don't have proper permission to either open a file or access the network.");
@@ -434,12 +472,73 @@ public class MCSignOnDoor {
 			System.out.println("IOException during log file setup: "+e.getMessage());
 		} finally {}
 	}
-	
+
 	protected static void parseConfigFile(File config) {
 		try {
 			Reader br = new InputStreamReader(new FileInputStream(config));
 			Properties p = new Properties();
 			p.load(br);
+			
+			String val;
+			if ((val = p.getProperty("server.port")) != null)
+				port = Integer.parseInt(val);
+			if ((val = p.getProperty("server.ip")) != null)
+				ip = InetAddress.getByName(val);
+			if ((val = p.getProperty("server.ignore.ping")) != null)
+				respondToPing = !Boolean.parseBoolean(val);
+			if ((val = p.getProperty("server.ignore.bannedping")) != null)
+				ignorePingFromBlocked = Boolean.parseBoolean(val);
+			
+			if ((val = p.getProperty("mode.sentry")) != null)
+				sentryMode = Boolean.parseBoolean(val);
+			
+			if ((val = p.getProperty("message.away")) != null)
+				if (!setAwayMessage(val)) { System.exit(-1); }
+			if ((val = p.getProperty("message.whitelist")) != null)
+				if (!setWhiteMessage(val)) { System.exit(-1); }
+			if ((val = p.getProperty("message.blacklist")) != null)
+				if (!setBannedMessage(val)) { System.exit(-1); }
+			if ((val = p.getProperty("message.bannedip")) != null)
+				if (!setIpMessage(val)) { System.exit(-1); }
+			
+			if ((val = p.getProperty("message.motd")) != null)
+				if (!setMotdMessage(val)) { System.exit(-1); }
+			if ((val = p.getProperty("message.motd.playerratio")) != null)
+				if (!setPlayerRatio(val)) { System.exit(-1); }
+			if ((val = p.getProperty("message.motd.reportedversion")) != null)
+				if (!setReportedVersion(val)) { System.exit(-1); }
+			
+			if ((val = p.getProperty("file.whitelist")) != null)
+				loadWhiteList(val);
+			if ((val = p.getProperty("file.blacklist")) != null)
+				loadBlackList(val);
+			if ((val = p.getProperty("file.bannedip")) != null)
+				loadIpList(val);
+			if ((val = p.getProperty("file.basepath")) != null)
+				basepath = new File(val).getPath()+File.separator;
+			
+			if ((val = p.getProperty("advanced.motd")) != null) //not in config.template
+				if (!setMotdVersion(Integer.parseInt(val))) {System.exit(-1);}
+			if ((val = p.getProperty("advanced.actas")) != null) //not in config.template
+				actAsVersion = getKnownProtocolVersion(Integer.getInteger(val));
+			
+			
+			if ((val = p.getProperty("file.log")) != null) {
+				String logfilename = val;
+				Logger rootlog = Logger.getLogger("");
+				rootlog.addHandler(new FileHandler(logfilename, true));
+			}
+			if ((val = p.getProperty("sever.silent")) != null) {
+				if (Boolean.parseBoolean(val)) {
+					Logger rootlog = Logger.getLogger("");
+					Handler hs[] = rootlog.getHandlers();
+					for (Handler h : hs){
+						if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
+					}
+				}
+			}
+			
+			/*
 			for (Object keyo : p.keySet()){
 				String key = (String)keyo;
 				if (key.equalsIgnoreCase("port")){
@@ -470,6 +569,8 @@ public class MCSignOnDoor {
 					ignorePingFromBlocked = Boolean.parseBoolean(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("basepath")){
 					basepath = new File(p.getProperty(key)).getPath()+File.separator;
+				} else if (key.equalsIgnoreCase("reportedversion")){
+					reportedVersionNumber = p.getProperty(key);
 				} else if (key.equalsIgnoreCase("sentrymode")){
 					sentryMode = Boolean.parseBoolean(p.getProperty(key));
 				} else if (key.equalsIgnoreCase("logfile")){
@@ -485,7 +586,9 @@ public class MCSignOnDoor {
 						}
 					}
 				}
-			}
+			}*/
+		} catch (NumberFormatException e) {
+			System.out.println("NumberFormatException while parsing config file: expected integer but found something else!");
 		} catch (IOException e){
 			System.out.println("IOException while attempting to load config file: "+e.getMessage());
 		}
@@ -540,6 +643,9 @@ public class MCSignOnDoor {
 			
 			tf.defineVariable("H_BASE", (basepath.isEmpty())?"#":"");
 			tf.defineVariable("V_BASE", basepath);
+			
+			tf.defineVariable("H_MOTDVER", "#");
+			tf.defineVariable("V_MOTDVER", Integer.toString(motdVersion));
 			
 			tf.defineVariable("H_LOG", "#");
 			//this is technically a bug, since it's not using the inputted filename, but whatever
@@ -620,6 +726,7 @@ public class MCSignOnDoor {
 		@Override public void run() {
 			boolean sentryActivated = false;
 			StringBuilder SBL = new StringBuilder();
+			
 			try {
 				byte[] inbyte = new byte[256];
 				boolean isBlocked = (blockedMessage != null) && (!blockedIps.isEmpty() &&
@@ -636,14 +743,21 @@ public class MCSignOnDoor {
 						return;
 					}
 					SBL.append("Client pinging server. Responding.");
-					sendInfo(motdMessage, numplayers, maxplayers);
+					sendInfo();
+					
 					
 				} else if (inbyte[0] == (byte)0x02) { //Handshake, pre-login
 					in.read(inbyte, 1, 1); //read "protocol version", byte length
 					int version = inbyte[1];
 					String reportedName = null, reportedServer = null; int reportedPort = 0;
 					
-					switch (version) { //hey, we finally have something to test against!
+					if (actAsVersion > -1) { //if acting as a specific protocol version
+						if (version != actAsVersion)
+							LOG.warning("Client's protocol version does not match version McSod is acting as! Client="+version+", McSod="+actAsVersion);
+						version = actAsVersion;
+					}
+					
+					switch (version) {
 					//CASE 0: this is for pre-version 1.3.1, when there was no version number
 					case 0: { 
 						in.read(inbyte, 2, 1); //read another byte, for message length
@@ -659,8 +773,9 @@ public class MCSignOnDoor {
 						}
 					} break;
 					
-					//CASE 39: this is for version 1.3.1, introduction of the protocol version
-					case 39: {
+					case 39: //CASE 39: this is for version 1.3.1, introduction of the protocol version
+					case 47: //CASE 47: this is for version 1.4.2, identical for this part here
+					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
 						in.read(inbyte, 5, len*2); //read username
@@ -711,6 +826,11 @@ public class MCSignOnDoor {
 					}
 					
 					
+					if (version >= 47) { //since protocol version 47, Encryption!
+						spoofEncryptionHandshake(); //spoof the encryption start, and then disconnect as if something went wrong in verification
+					}
+					
+					
 					if (isBlocked){
 						SBL.append(". Client found on the banned IPs list. The bastard.");
 						sendDisconnect(blockedMessage);
@@ -748,7 +868,7 @@ public class MCSignOnDoor {
 				System.exit(12);
 			}
 		}
-		
+
 		public short parseChar(byte[] arr, int off){
 			final int LEN = 2; //long are 8 bytes long
 			if (arr.length < LEN) throw new InvalidParameterException();
@@ -789,23 +909,68 @@ public class MCSignOnDoor {
 			out.write(bb.toByteArray());
 			out.flush();
 		}
-		private void sendInfo(String message, String numPlayers, String maxPlayers) throws IOException {
-			ByteBuilder bb = new ByteBuilder();
-			bb.append((byte)0xFF);
-			bb.appendSpecial(message.length()+numPlayers.length()+maxPlayers.length()+2, 2, false);
-			bb.append(message);
-			
-			//if (sendPlayerRatio)
-			{
-				bb.append((byte)0).append((byte)0xA7);
-				bb.append(numPlayers);
-				bb.append((byte)0).append((byte)0xA7);
-				bb.append(maxPlayers);
+		private void sendInfo() throws IOException {
+			switch (motdVersion) {
+			case 0: {
+				ByteBuilder bb = new ByteBuilder();
+				bb.append((byte)0xFF);
+				bb.appendSpecial(motdMessage.length()+numplayers.length()+maxplayers.length()+2, 2, false);
+				bb.append(motdMessage);
+				
+				//if (sendPlayerRatio)
+				{
+					bb.append((byte)0).append((byte)0xA7);
+					bb.append(numplayers);
+					bb.append((byte)0).append((byte)0xA7);
+					bb.append(maxplayers);
+				}
+				out.write(bb.toByteArray());
+				out.flush();
+			} break;
+			case 1: { //protocol version 47 update, motd version 1
+				StringBuilder sb = new StringBuilder();
+				sb.append('\u00A7').append('1').append('\0'); //motd version indicator and version number
+				if (actAsVersion > -1)
+					sb.append(CURRENT_PROTOCOL_VERSION).append('\0'); //protocol version number
+				else
+					sb.append(actAsVersion).append('\0'); //protocol version number
+				sb.append(reportedVersionNumber).append('\0');
+				sb.append(motdMessage).append('\0');
+				sb.append(numplayers).append('\0');
+				sb.append(maxplayers).append('\0');
+				
+				ByteBuilder bb = new ByteBuilder();
+				bb.append((byte)0xFF);
+				bb.appendSpecial(sb.length(), 2, false);
+				bb.append(sb.toString());
+				
+				out.write(bb.toByteArray());
+				out.flush();
+			} break;
 			}
-//			System.out.println(bb.toString());
+			
+		}
+		
+		private static final byte key[] = new byte[1024]; //the key is all 0's
+		private void spoofEncryptionHandshake() throws IOException {
+			//This method makes it look like we're starting an encryption handshake, but before anything
+			//serious happens, we stop this and kick them unencrypted.
+			
+			ByteBuilder bb = new ByteBuilder();
+			bb.append((byte)0xFD); //encryption request
+			bb.append((byte)0x00).append((byte)0x06); //TODO test what a server id is //Server Id
+			bb.append("000000");
+			bb.appendSpecial(1024, 2, false); //the encryption key
+			bb.append(key);
+			bb.appendSpecial(4, 2, false); //the verification number
+			bb.append(new byte[]{10, 4, 21, 21});
+			
 			out.write(bb.toByteArray());
 			out.flush();
+			
+			in.read(); //wait for response before continuing
 		}
+		
 		/*
 		@SuppressWarnings("unused")
 		private void sendConnect() throws IOException{
