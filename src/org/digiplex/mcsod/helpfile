@@ -39,8 +39,8 @@ Command line switches:
 
 	-v --reported-version [versionstring]
 	        Sets the version reported over motd. Default: %VERDEF%
-	   --motd-version [version]
-	        Sets the version of motd to send. Defaults to latest. [4]
+	-# --show-version
+	        Forces the client to show the reported version string in red.
 	   --act-as-protocol [version]
 		    Sets which protocol version to act as. Defaults to latest.
 		    (Warning: advanced functionality - you don't need this)

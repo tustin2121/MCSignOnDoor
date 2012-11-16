@@ -51,8 +51,13 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
 	private static final String VERSION = "1.8";
-	private static final int CURRENT_PROTOCOL_VERSION = 47;
-	private static final int CURRENT_MOTD_VERSION = 1;
+	private static final int CURRENT_PROTOCOL_VERSION; //set in constructor below
+	
+	static { //static constructor
+		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
+		if (protoversion == null) protoversion = /****/ "49" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
+	}
 	
 	private static final String BLACKLIST_IP_FILE = "banned-ips.txt";
 	private static final String BLACKLIST_NAME_FILE = "banned-players.txt";
@@ -63,16 +68,15 @@ public class MCSignOnDoor {
 	private static int port = 25565;
 	private static InetAddress ip = null;
 	
-	private static int motdVersion = CURRENT_MOTD_VERSION;
 	private static int actAsVersion = -1;
-	private static String reportedVersionNumber = "0.0.0";
+	private static String reportedVersionNumber = "Offline";
 	
 	private static boolean sentryMode = false;
 	
 	private static String awayMessage = "The server is not currently running.";
 	
 	private static String motdMessage = null; //"MCSignOnDoor: Server not Running.";
-	private static String numplayers = "0", maxplayers = "0";
+	private static String numplayers = "0", maxplayers = "20";
 	private static boolean respondToPing = true, ratioSet = false;
 	
 	private static String basepath = "";//new File("").getPath()+File.separator;
@@ -128,6 +132,9 @@ public class MCSignOnDoor {
 			
 			if (sentryMode)
 				LOG.info("Server set to sentry mode, will exit when someone connects.");
+			
+			LOG.info("Server protocol set to "+((actAsVersion < 0)?"latest ("+CURRENT_PROTOCOL_VERSION+")":"act as "+actAsVersion)+"."+
+					((actAsVersion==-2)?" (Sending bad protocol number with MOTD to show version client-side)":""));
 			
 			if (awayMessage.length() > 80){
 				LOG.warning("Message length exceeds 80 characters. You may add newlines by using the sequence \"\\n\" in a message.");
@@ -199,6 +206,7 @@ public class MCSignOnDoor {
 	}
 	
 	private static int getKnownProtocolVersion(int v) {
+		if (v >= 49) return v; //allow higher numbers, since it seems to be rapidly rising
 		if (v >= 47) return 47; //addition of encryption
 		if (v >= 39) return 39; //change of handshake and login request, and also unicode.
 		return 0; //before things reported protocol versions
@@ -284,20 +292,8 @@ public class MCSignOnDoor {
 		motdMessage = motd;
 		return true;
 	}
-	public static boolean setMotdVersion(int v) {
-		switch (v) {
-		case 0: //first version of the motd, with string and player ratio
-		case 1: //second version, added server version number
-			motdVersion = v;
-			return true;
-		default:
-			System.out.println("Invalid or unrecognized MOTD version!");
-			return false;
-		}
-	}
 	public static boolean setReportedVersion(String ver) {
-		//TODO test if this works, and what works
-		reportedVersionNumber = ver;
+		reportedVersionNumber = ver; //everything works
 		return true;
 	}
 	public static boolean setPlayerRatio(String ratio){
@@ -449,8 +445,8 @@ public class MCSignOnDoor {
 					for (Handler h : hs){
 						if (h instanceof ConsoleHandler) rootlog.removeHandler(h);
 					}
-				} else if (arg.equalsIgnoreCase("--motd-version")){
-					if (!setMotdVersion(Integer.parseInt(argbuffer.pop()))) {System.exit(-1);}
+				} else if (arg.equalsIgnoreCase("--show-version") || arg.equalsIgnoreCase("-#")) {
+					actAsVersion = -2; //Hack to get the mc client to report "out of date", which shows the version number
 				} else if (arg.equalsIgnoreCase("--act-as-protocol")){
 					actAsVersion = getKnownProtocolVersion(Integer.parseInt(argbuffer.pop()));
 				} else {
@@ -517,8 +513,8 @@ public class MCSignOnDoor {
 			if ((val = p.getProperty("file.basepath")) != null)
 				basepath = new File(val).getPath()+File.separator;
 			
-			if ((val = p.getProperty("advanced.motd")) != null) //not in config.template
-				if (!setMotdVersion(Integer.parseInt(val))) {System.exit(-1);}
+			if ((val = p.getProperty("advanced.forceversion")) != null) //not in config.template
+				actAsVersion = -2;
 			if ((val = p.getProperty("advanced.actas")) != null) //not in config.template
 				actAsVersion = getKnownProtocolVersion(Integer.getInteger(val));
 			
@@ -645,7 +641,7 @@ public class MCSignOnDoor {
 			tf.defineVariable("V_BASE", basepath);
 			
 			tf.defineVariable("H_MOTDVER", "#");
-			tf.defineVariable("V_MOTDVER", Integer.toString(motdVersion));
+			tf.defineVariable("V_MOTDVER", reportedVersionNumber);
 			
 			tf.defineVariable("H_LOG", "#");
 			//this is technically a bug, since it's not using the inputted filename, but whatever
@@ -742,8 +738,14 @@ public class MCSignOnDoor {
 						SBL.append("Client found on the banned IPs list pinging server. Ignoring.");
 						return;
 					}
+					
+					int version = 0;
+					if (actAsVersion <= -1 || actAsVersion > 46) { //grab the byte only if not dealing with motd ver 0
+						in.read(inbyte, 1, 1); //read "motd version", byte length
+						version = inbyte[1];
+					}
 					SBL.append("Client pinging server. Responding.");
-					sendInfo();
+					sendInfo(version);
 					
 					
 				} else if (inbyte[0] == (byte)0x02) { //Handshake, pre-login
@@ -775,6 +777,7 @@ public class MCSignOnDoor {
 					
 					case 39: //CASE 39: this is for version 1.3.1, introduction of the protocol version
 					case 47: //CASE 47: this is for version 1.4.2, identical for this part here
+					case 49: //CASE 49: version 1.4.4, no change to protocol
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
@@ -827,7 +830,7 @@ public class MCSignOnDoor {
 					
 					
 					if (version >= 47) { //since protocol version 47, Encryption!
-						spoofEncryptionHandshake(); //spoof the encryption start, and then disconnect as if something went wrong in verification
+				//		spoofEncryptionHandshake(); //spoof the encryption start, and then disconnect as if something went wrong in verification
 					}
 					
 					
@@ -909,8 +912,8 @@ public class MCSignOnDoor {
 			out.write(bb.toByteArray());
 			out.flush();
 		}
-		private void sendInfo() throws IOException {
-			switch (motdVersion) {
+		private void sendInfo(int version) throws IOException {
+			switch (version) {
 			case 0: {
 				ByteBuilder bb = new ByteBuilder();
 				bb.append((byte)0xFF);
@@ -930,7 +933,7 @@ public class MCSignOnDoor {
 			case 1: { //protocol version 47 update, motd version 1
 				StringBuilder sb = new StringBuilder();
 				sb.append('\u00A7').append('1').append('\0'); //motd version indicator and version number
-				if (actAsVersion > -1)
+				if (actAsVersion == -1)
 					sb.append(CURRENT_PROTOCOL_VERSION).append('\0'); //protocol version number
 				else
 					sb.append(actAsVersion).append('\0'); //protocol version number
@@ -968,7 +971,11 @@ public class MCSignOnDoor {
 			out.write(bb.toByteArray());
 			out.flush();
 			
-			in.read(); //wait for response before continuing
+			byte b[] = new byte[1];
+			while (true) {
+				in.read(b); //wait for response before continuing
+				if (b[0] == 0xFC) break;
+			}
 		}
 		
 		/*
