@@ -781,9 +781,9 @@ public class MCSignOnDoor {
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
-						in.read(inbyte, 5, len*2); //read username
+						in.read(inbyte, 4, len*2); //read username
 						{
-							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 5, (len+1)*2+1));
+							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 4, 4+(len*2)));
 							CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
 							CharBuffer cb = d.decode(bb);
 							reportedName = cb.toString();
