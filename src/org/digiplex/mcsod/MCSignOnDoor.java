@@ -55,7 +55,7 @@ public class MCSignOnDoor {
 	
 	static { //static constructor
 		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
-		if (protoversion == null) protoversion = /****/ "49" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		if (protoversion == null) protoversion = /****/ "51" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
 		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
 	}
 	
@@ -778,6 +778,7 @@ public class MCSignOnDoor {
 					case 39: //CASE 39: this is for version 1.3.1, introduction of the protocol version
 					case 47: //CASE 47: this is for version 1.4.2, identical for this part here
 					case 49: //CASE 49: version 1.4.4, no change to protocol
+					case 51: //CASE 51: version 1.4.6, no change
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
@@ -955,6 +956,7 @@ public class MCSignOnDoor {
 		}
 		
 		private static final byte key[] = new byte[1024]; //the key is all 0's
+		@SuppressWarnings("unused")
 		private void spoofEncryptionHandshake() throws IOException {
 			//This method makes it look like we're starting an encryption handshake, but before anything
 			//serious happens, we stop this and kick them unencrypted.
