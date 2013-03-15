@@ -55,7 +55,7 @@ public class MCSignOnDoor {
 	
 	static { //static constructor
 		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
-		if (protoversion == null) protoversion = /****/ "49" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		if (protoversion == null) protoversion = /****/ "60" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
 		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
 	}
 	
@@ -72,6 +72,7 @@ public class MCSignOnDoor {
 	private static String reportedVersionNumber = "Offline";
 	
 	private static boolean sentryMode = false;
+        private static boolean sentryModeWhitelistOnly = false;
 	
 	private static String awayMessage = "The server is not currently running.";
 	
@@ -130,9 +131,11 @@ public class MCSignOnDoor {
 			else
 				LOG.info("Server set to ignore pings.");
 			
-			if (sentryMode)
+			if (sentryMode &! sentryModeWhitelistOnly)
 				LOG.info("Server set to sentry mode, will exit when someone connects.");
-			
+                        if (sentryMode && sentryModeWhitelistOnly)
+                                LOG.info("Server set to whitelist-only sentry mode, will exit when someone on whitelist connects.");
+                        
 			LOG.info("Server protocol set to "+((actAsVersion < 0)?"latest ("+CURRENT_PROTOCOL_VERSION+")":"act as "+actAsVersion)+"."+
 					((actAsVersion==-2)?" (Sending bad protocol number with MOTD to show version client-side)":""));
 			
@@ -430,7 +433,10 @@ public class MCSignOnDoor {
 					basepath = new File(argbuffer.pop()).getPath()+File.separator;
 				} else if (arg.equalsIgnoreCase("--sentrymode")){
 					sentryMode = true;
-				} else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
+				} else if (arg.equalsIgnoreCase("--sentrymode-whitelistonly")){
+                                        sentryMode = true;
+					sentryModeWhitelistOnly = true;
+				}else if (arg.equalsIgnoreCase("-l") || arg.equalsIgnoreCase("--log") || arg.equalsIgnoreCase("--logfile")){
 					String logfilename;
 					if (!argbuffer.peek().startsWith("-")){
 						logfilename = argbuffer.pop();
@@ -487,6 +493,8 @@ public class MCSignOnDoor {
 			
 			if ((val = p.getProperty("mode.sentry")) != null)
 				sentryMode = Boolean.parseBoolean(val);
+                        if ((val = p.getProperty("mode.sentry.whitelistonly")) != null)
+				sentryModeWhitelistOnly = Boolean.parseBoolean(val);
 			
 			if ((val = p.getProperty("message.away")) != null)
 				if (!setAwayMessage(val)) { System.exit(-1); }
@@ -608,6 +616,9 @@ public class MCSignOnDoor {
 			
 			tf.defineVariable("H_SNTRY", (!sentryMode)?"#":"");
 			tf.defineVariable("V_SNTRY", Boolean.toString(sentryMode));
+                        
+                        tf.defineVariable("H_SNTRYWL", (!sentryModeWhitelistOnly)?"#":"");
+			tf.defineVariable("V_SNTRYWL", Boolean.toString(sentryModeWhitelistOnly));
 			
 			tf.defineVariable("H_MOTD", (motdMessage == null)?"#":"");
 			tf.defineVariable("V_MOTD", (motdMessage == null)?"":motdMessage);
@@ -697,7 +708,7 @@ public class MCSignOnDoor {
 			}
 		}
 		
-		if (whitelistMessage != null && whiteUsers == null){ //if a message was set but a file was not specified 
+		if ((whitelistMessage != null || sentryModeWhitelistOnly) && whiteUsers == null){ //if a message was set but a file was not specified 
 			loadWhiteList(WHITELIST_NAME_FILE);
 		}
 	}
@@ -778,12 +789,14 @@ public class MCSignOnDoor {
 					case 39: //CASE 39: this is for version 1.3.1, introduction of the protocol version
 					case 47: //CASE 47: this is for version 1.4.2, identical for this part here
 					case 49: //CASE 49: version 1.4.4, no change to protocol
+					case 51: //CASE 51: version 1.4.6, no change that I'm aware of
+                                        case 60: //CASE 60: version 1.5, no change that I'm aware of
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
-						in.read(inbyte, 5, len*2); //read username
+						in.read(inbyte, 4, len*2); //read username
 						{
-							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 5, (len+1)*2+1));
+							ByteBuffer bb = ByteBuffer.wrap(Arrays.copyOfRange(inbyte, 4, 4+(len*2)));
 							CharsetDecoder d = Charset.forName("UTF-16BE").newDecoder();
 							CharBuffer cb = d.decode(bb);
 							reportedName = cb.toString();
@@ -850,26 +863,28 @@ public class MCSignOnDoor {
 						if (whiteUsers.contains(reportedName)) {
 							SBL.append(". Client found on the whitelist. Giving candy.");
 							sendDisconnect(whitelistMessage);
-							sentryActivated = true;
+                                                        sentryActivated = true;
 							return;
 						}
 					}
 					
 					SBL.append(". Turning away.");
 					sendDisconnect(awayMessage);
-					sentryActivated = true;
+                                        if (!sentryModeWhitelistOnly || (whiteUsersLoaded && whiteUsers.contains(reportedName))){
+                                            sentryActivated = true;  //Only true if we weren't expecting a whitelist, or user matches
+                                        }
 				} //*/
 			} catch (IOException e) {
 				LOG.log(Level.SEVERE, "IOException while processing client!", e);
 			} finally {
 				LOG.info(SBL.toString());
 				try {sock.close();} catch (IOException e){}
-			}
-			
-			if (sentryMode && sentryActivated) {
-				LOG.info("As per Sentry Mode, now shutting down.");
-				System.exit(12);
-			}
+                                
+                                if (sentryMode && sentryActivated ) {
+                                    LOG.info("As per Sentry Mode, now shutting down.");
+                                    System.exit(12);
+                                }
+			}				
 		}
 
 		public short parseChar(byte[] arr, int off){
