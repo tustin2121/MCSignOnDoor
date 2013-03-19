@@ -1,5 +1,4 @@
-- Fixed a long standing bug where if a config file was used...
-  - ...to specify an ip banned list, it would instead load it into the blacklist, thereby making banned ips not function.
-  - ...to enable pings, it would instead disable pings, and vice-versa.
-- Changed how the config file works, using heierarcy-type keys.
-- Added encryption spoofing (not actual encryption, but the start of the handshake until we can get to a legal kick point)
+- Changed the way protocols are handled, so now with a new protocol version, McSod 
+  will just assume everything works from the previous protocol version.
+  - Current protocol version will still need to be updated for the server to not
+    show as out of date to a prospective client's server listing.

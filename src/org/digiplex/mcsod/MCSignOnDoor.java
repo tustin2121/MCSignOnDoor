@@ -50,7 +50,7 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.8";
+	private static final String VERSION = "1.9";
 	private static final int CURRENT_PROTOCOL_VERSION; //set in constructor below
 	
 	static { //static constructor
@@ -203,13 +203,6 @@ public class MCSignOnDoor {
 		} finally {
 			try {serve.close();} catch (IOException e) {}
 		}
-	}
-	
-	private static int getKnownProtocolVersion(int v) {
-		if (v >= 49) return v; //allow higher numbers, since it seems to be rapidly rising
-		if (v >= 47) return 47; //addition of encryption
-		if (v >= 39) return 39; //change of handshake and login request, and also unicode.
-		return 0; //before things reported protocol versions
 	}
 	
 	///////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +441,7 @@ public class MCSignOnDoor {
 				} else if (arg.equalsIgnoreCase("--show-version") || arg.equalsIgnoreCase("-#")) {
 					actAsVersion = -2; //Hack to get the mc client to report "out of date", which shows the version number
 				} else if (arg.equalsIgnoreCase("--act-as-protocol")){
-					actAsVersion = getKnownProtocolVersion(Integer.parseInt(argbuffer.pop()));
+					actAsVersion = Integer.parseInt(argbuffer.pop());
 				} else {
 					System.out.println("Unknown command line switch \""+arg+"\". Continuing...");
 				}
@@ -516,7 +509,7 @@ public class MCSignOnDoor {
 			if ((val = p.getProperty("advanced.forceversion")) != null) //not in config.template
 				actAsVersion = -2;
 			if ((val = p.getProperty("advanced.actas")) != null) //not in config.template
-				actAsVersion = getKnownProtocolVersion(Integer.getInteger(val));
+				actAsVersion = Integer.getInteger(val);
 			
 			
 			if ((val = p.getProperty("file.log")) != null) {
@@ -728,6 +721,8 @@ public class MCSignOnDoor {
 				boolean isBlocked = (blockedMessage != null) && (!blockedIps.isEmpty() &&
 						blockedIps.contains(sock.getInetAddress().getHostAddress()));
 				
+				ProtocolHandler actAsHandler = ProtocolHandler.getHandlerForProtocol(actAsVersion);
+				
 				in.read(inbyte, 0, 1); //read connect byte
 				if (inbyte[0] == (byte)0xFE) { //Minecraft 1.8 Server Ping
 					if (!respondToPing) {
@@ -740,7 +735,7 @@ public class MCSignOnDoor {
 					}
 					
 					int version = 0;
-					if (actAsVersion <= -1 || actAsVersion > 46) { //grab the byte only if not dealing with motd ver 0
+					if (actAsHandler == null || actAsHandler.motdResponse > 0) { //grab the byte only if not dealing with motd ver 0
 						in.read(inbyte, 1, 1); //read "motd version", byte length
 						version = inbyte[1];
 					}
@@ -759,7 +754,11 @@ public class MCSignOnDoor {
 						version = actAsVersion;
 					}
 					
-					switch (version) {
+					ProtocolHandler handler = ProtocolHandler.getHandlerForProtocol(version);
+					int handshakeMethod = (handler != null)?handler.handshakeResponse:-1;
+					
+					////////////// Begin Handshake //////////////
+					switch (handshakeMethod) {
 					//CASE 0: this is for pre-version 1.3.1, when there was no version number
 					case 0: { 
 						in.read(inbyte, 2, 1); //read another byte, for message length
@@ -775,9 +774,7 @@ public class MCSignOnDoor {
 						}
 					} break;
 					
-					case 39: //CASE 39: this is for version 1.3.1, introduction of the protocol version
-					case 47: //CASE 47: this is for version 1.4.2, identical for this part here
-					case 49: //CASE 49: version 1.4.4, no change to protocol
+					case 1: //CASE 1: this is for version 1.3.1 and up
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
@@ -810,6 +807,7 @@ public class MCSignOnDoor {
 					} break;
 					
 					//DEFAULT CASE: This is for when the protocol is updated and we have no idea what to do with it.
+					// With the protocol handlers update, this shouldn't be reached under normal circumstances
 					default: {
 						SBL.append("Client with unknown version (").append(version).append(") of Handshake Protocol attempting login! Printing raw data:\n");
 						in.read(inbyte, 2, 250);
@@ -823,40 +821,40 @@ public class MCSignOnDoor {
 						}
 						SBL.append('\n').append("Readable items: ").append(charData).append("\nFeel free to give tustin2121 this information on the bukkit thread. :)");
 						
-						sendDisconnect(awayMessage);
+						sendDisconnect(awayMessage, 0); //disconnect with standard method
 						return;
 					}
 					}
+					////////////// End Handshake //////////////
 					
 					
-					if (version >= 47) { //since protocol version 47, Encryption!
-				//		spoofEncryptionHandshake(); //spoof the encryption start, and then disconnect as if something went wrong in verification
-					}
+					//spoof the encryption start, and then disconnect as if something went wrong in verification
+					spoofEncryptionHandshake(handler.encryptionResponse);
 					
 					
 					if (isBlocked){
 						SBL.append(". Client found on the banned IPs list. The bastard.");
-						sendDisconnect(blockedMessage);
+						sendDisconnect(blockedMessage, handler.disconnectResponse);
 						return;
 					}
 					if (bannedMessage != null){// bannedUsers != null){
 						if (bannedUsers.contains(reportedName)) {
 							SBL.append(". Client found on the blacklist. Shooing.");
-							sendDisconnect(bannedMessage);
+							sendDisconnect(bannedMessage, handler.disconnectResponse);
 							return;
 						}
 					}
 					if (whitelistMessage != null){// whiteUsers != null){
 						if (whiteUsers.contains(reportedName)) {
 							SBL.append(". Client found on the whitelist. Giving candy.");
-							sendDisconnect(whitelistMessage);
+							sendDisconnect(whitelistMessage, handler.disconnectResponse);
 							sentryActivated = true;
 							return;
 						}
 					}
 					
 					SBL.append(". Turning away.");
-					sendDisconnect(awayMessage);
+					sendDisconnect(awayMessage, handler.disconnectResponse);
 					sentryActivated = true;
 				} //*/
 			} catch (IOException e) {
@@ -902,16 +900,26 @@ public class MCSignOnDoor {
 			return value;
 		}
 		
-		private void sendDisconnect(String message) throws IOException{
-			ByteBuilder bb = new ByteBuilder();
-			bb.append((byte)0xFF);
-			bb.appendSpecial(message.length(), 2, false);
-			bb.append(message);
+		private void sendDisconnect(String message, int method) throws IOException {
+			switch (method) {
+			case 0: {
+				ByteBuilder bb = new ByteBuilder();
+				bb.append((byte)0xFF);
+				bb.appendSpecial(message.length(), 2, false);
+				bb.append(message);
+				
+//				System.out.println(bb.toString());
+				out.write(bb.toByteArray());
+				out.flush();
+			} break;
+			default:
+				LOG.warning("Unknown disconnect method!");
+			}
 			
-//			System.out.println(bb.toString());
-			out.write(bb.toByteArray());
-			out.flush();
 		}
+		
+		// NOTE: This version is the motd version, which is different from the protocol version
+		// and is sent with every MOTD request
 		private void sendInfo(int version) throws IOException {
 			switch (version) {
 			case 0: {
@@ -955,26 +963,33 @@ public class MCSignOnDoor {
 		}
 		
 		private static final byte key[] = new byte[1024]; //the key is all 0's
-		private void spoofEncryptionHandshake() throws IOException {
+		private void spoofEncryptionHandshake(int method) throws IOException {
 			//This method makes it look like we're starting an encryption handshake, but before anything
 			//serious happens, we stop this and kick them unencrypted.
-			
-			ByteBuilder bb = new ByteBuilder();
-			bb.append((byte)0xFD); //encryption request
-			bb.append((byte)0x00).append((byte)0x06); //TODO test what a server id is //Server Id
-			bb.append("000000");
-			bb.appendSpecial(1024, 2, false); //the encryption key
-			bb.append(key);
-			bb.appendSpecial(4, 2, false); //the verification number
-			bb.append(new byte[]{10, 4, 21, 21});
-			
-			out.write(bb.toByteArray());
-			out.flush();
-			
-			byte b[] = new byte[1];
-			while (true) {
-				in.read(b); //wait for response before continuing
-				if (b[0] == 0xFC) break;
+			switch (method) {
+			case 0: return; //do nothing
+			case 1: {
+				ByteBuilder bb = new ByteBuilder();
+				bb.append((byte)0xFD); //encryption request
+				bb.append((byte)0x00).append((byte)0x06); //TODO test what a server id is //Server Id
+				bb.append("000000");
+				bb.appendSpecial(1024, 2, false); //the encryption key
+				bb.append(key);
+				bb.appendSpecial(4, 2, false); //the verification number
+				bb.append(new byte[]{10, 4, 21, 21});
+				
+				out.write(bb.toByteArray());
+				out.flush();
+				
+				byte b[] = new byte[1];
+				while (true) {
+					in.read(b); //wait for response before continuing
+					if (b[0] == 0xFC) break;
+				}
+			} break;
+			default: 
+				LOG.warning("Unknown encryption handshake method!"); 
+				return;
 			}
 		}
 		
