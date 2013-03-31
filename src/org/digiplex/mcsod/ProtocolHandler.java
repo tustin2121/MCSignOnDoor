@@ -1,5 +1,6 @@
 package org.digiplex.mcsod;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -9,6 +10,9 @@ final class ProtocolHandler {
 	
 	public static void defineProtocols() throws IOException, NumberFormatException, IllegalArgumentException {
 		InputStream is = ProtocolHandler.class.getClassLoader().getResourceAsStream("META-INF/protocols.properties");
+		if (is == null) 
+			throw new FileNotFoundException("Protocol properties not found!!");
+		
 		Properties props = new Properties();
 		props.load(is);
 		
@@ -22,10 +26,10 @@ final class ProtocolHandler {
 			
 			ph.protoMin = Integer.parseInt(props.getProperty(key+"protocols.min"));
 			ph.protoMax = Integer.parseInt(props.getProperty(key+"protocols.max"));
-			ph.handshakeResponse = Integer.parseInt(props.getProperty(key+"protocols.handshake"));
-			ph.disconnectResponse = Integer.parseInt(props.getProperty(key+"protocols.disconnect"));
-			ph.motdResponse = Integer.parseInt(props.getProperty(key+"protocols.motd"));
-			ph.encryptionResponse = Integer.parseInt(props.getProperty(key+"protocols.encryption"));
+			ph.handshakeResponse = Integer.parseInt(props.getProperty(key+"handshake"));
+			ph.disconnectResponse = Integer.parseInt(props.getProperty(key+"disconnect"));
+			ph.motdResponse = Integer.parseInt(props.getProperty(key+"motd"));
+			ph.encryptionResponse = Integer.parseInt(props.getProperty(key+"encryption"));
 			
 			handlerStack[i] = ph;
 		}

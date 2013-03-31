@@ -10,7 +10,9 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.io.Reader;
+import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
@@ -55,7 +57,7 @@ public class MCSignOnDoor {
 	
 	static { //static constructor
 		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
-		if (protoversion == null) protoversion = /****/ "49" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		if (protoversion == null) protoversion = /****/ "60" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
 		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
 	}
 	
@@ -107,6 +109,16 @@ public class MCSignOnDoor {
 			for (Handler h : rootlog.getHandlers()){ //remove all handlers
 				h.setFormatter(new McSodFormatter());
 			}
+		}
+		
+		try {
+			ProtocolHandler.defineProtocols();
+		} catch (FileNotFoundException ex) {
+			LOG.log(Level.SEVERE, "Protocol file was not found in the META-INF directory! Cannot continue!"); System.exit(-1);
+		} catch (IOException ex) {
+			LOG.log(Level.SEVERE, "IOException while defining protocols! Cannot continue!", ex); System.exit(-1);
+		} catch (IllegalArgumentException ex) {
+			LOG.log(Level.SEVERE, "Error reading the protocol file! Cannot continue!", ex); System.exit(-1);
 		}
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(){
@@ -703,6 +715,7 @@ public class MCSignOnDoor {
 		private BufferedOutputStream out;
 		
 		ResponderThread(Socket s) {
+			super("Responder Thread");
 			sock = s;
 			try {
 				in = new BufferedInputStream(s.getInputStream());
@@ -1036,7 +1049,10 @@ class McSodFormatter extends Formatter {
 			.append(" [").append(record.getLevel().getName()).append("]: ")
 			.append(this.formatMessage(record)).append('\n');
 		if (record.getThrown() != null){
-			buf.append('\t').append(record.getThrown().toString()).append('\n');
+			StringWriter sw = new StringWriter();
+			PrintWriter pw = new PrintWriter(sw);
+			record.getThrown().printStackTrace(pw);
+			buf.append(sw.toString());
 		}
 		return buf.toString();
 	}

@@ -1,5 +1,7 @@
 Manifest-Version: 1.0
+Class-Path: .
+Created-By: 1.6.0_17 (Sun Microsystems Inc.)
 Main-Class: org.digiplex.mcsod.MCSignOnDoor
 Implementation-Vendor: Tustin2121
-Specification-Version: 49
+Specification-Version: 60
 
