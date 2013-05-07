@@ -50,12 +50,12 @@ import org.digiplex.common.TemplateFormatter.MalformedFormatException;
 
 public class MCSignOnDoor {
 	private static final Logger LOG = Logger.getLogger("McSod");
-	private static final String VERSION = "1.8";
+	private static final String VERSION = "1.5.2";
 	private static final int CURRENT_PROTOCOL_VERSION; //set in constructor below
 	
 	static { //static constructor
 		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
-		if (protoversion == null) protoversion = /****/ "60" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		if (protoversion == null) protoversion = /****/ "61" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
 		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
 	}
 	
@@ -791,6 +791,7 @@ public class MCSignOnDoor {
 					case 49: //CASE 49: version 1.4.4, no change to protocol
 					case 51: //CASE 51: version 1.4.6, no change that I'm aware of
                                         case 60: //CASE 60: version 1.5, no change that I'm aware of
+                                        case 61: //CASE 61: version 1.5.2, no change that I'm aware of
 					{
 						in.read(inbyte, 2, 2); //read 16-byte number, message length
 						int len = parseChar(inbyte, 2);
