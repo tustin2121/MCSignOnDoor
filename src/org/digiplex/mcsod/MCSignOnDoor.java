@@ -320,7 +320,7 @@ public class MCSignOnDoor {
 		ArrayList<String> listing = new ArrayList<String>();
 		String line;
 		while((line = br.readLine()) != null){
-			listing.add(line);
+			listing.add(line.toLowerCase());
 		}
 		br.close();
 		return listing;
@@ -855,14 +855,14 @@ public class MCSignOnDoor {
 						return;
 					}
 					if (bannedMessage != null){// bannedUsers != null){
-						if (bannedUsers.contains(reportedName)) {
+						if (bannedUsers.contains(reportedName.toLowerCase())) {
 							SBL.append(". Client found on the blacklist. Shooing.");
 							sendDisconnect(bannedMessage);
 							return;
 						}
 					}
 					if (whitelistMessage != null){// whiteUsers != null){
-						if (whiteUsers.contains(reportedName)) {
+						if (whiteUsers.contains(reportedName.toLowerCase())) {
 							SBL.append(". Client found on the whitelist. Giving candy.");
 							sendDisconnect(whitelistMessage);
                                                         sentryActivated = true;
@@ -872,7 +872,7 @@ public class MCSignOnDoor {
 					
 					SBL.append(". Turning away.");
 					sendDisconnect(awayMessage);
-                                        if (!sentryModeWhitelistOnly || (whiteUsersLoaded && whiteUsers.contains(reportedName))){
+                                        if (!sentryModeWhitelistOnly || (whiteUsersLoaded && whiteUsers.contains(reportedName.toLowerCase()))){
                                             sentryActivated = true;  //Only true if we weren't expecting a whitelist, or user matches
                                         }
 				} //*/
