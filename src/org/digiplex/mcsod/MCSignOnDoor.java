@@ -57,7 +57,7 @@ public class MCSignOnDoor {
 	
 	static { //static constructor
 		String protoversion = MCSignOnDoor.class.getPackage().getSpecificationVersion();
-		if (protoversion == null) protoversion = /****/ "60" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
+		if (protoversion == null) protoversion = /****/ "61" /****/; //up to date protocol version - UPDATE MANIFEST TOO!
 		CURRENT_PROTOCOL_VERSION = Integer.parseInt(protoversion);
 	}
 	
